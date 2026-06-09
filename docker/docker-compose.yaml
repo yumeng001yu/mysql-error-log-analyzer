@@ -1,0 +1,51 @@
+version: "3.8"
+
+services:
+  mysql-log-analyzer:
+    build:
+      context: ..
+      dockerfile: docker/Dockerfile
+    container_name: mysql-log-analyzer
+    ports:
+      - "8080:8080"
+    volumes:
+      - ../config/config.yaml:/app/config/config.yaml:ro
+      - mysql-log-data:/var/log/mysql
+      - app-data:/app/data
+    environment:
+      - TZ=Asia/Shanghai
+      - PYTHONUNBUFFERED=1
+      # LLM 配置（也可通过 config.yaml 设置）
+      # - LLM_API_KEY=your-api-key
+      # - LLM_API_BASE=https://api.openai.com/v1
+      # - LLM_MODEL=gpt-4
+    restart: unless-stopped
+    depends_on:
+      mysql-test:
+        condition: service_started
+
+  # 可选：MySQL 测试实例
+  mysql-test:
+    image: mysql:8.0
+    container_name: mysql-test
+    environment:
+      - MYSQL_ROOT_PASSWORD=testpassword
+      - MYSQL_DATABASE=testdb
+      - TZ=Asia/Shanghai
+    command: >
+      --log-error=/var/log/mysql/error.log
+      --log-error-verbosity=3
+    volumes:
+      - mysql-log-data:/var/log/mysql
+      - mysql-data:/var/lib/mysql
+    ports:
+      - "3306:3306"
+    restart: unless-stopped
+
+volumes:
+  mysql-log-data:
+    driver: local
+  mysql-data:
+    driver: local
+  app-data:
+    driver: local

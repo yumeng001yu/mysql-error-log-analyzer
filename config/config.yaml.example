@@ -1,0 +1,96 @@
+# MySQL Error Log Analyzer 配置文件
+
+# LLM 大模型配置
+llm:
+  # 提供商: openai / ollama / custom
+  provider: "openai"
+  # 模型名称
+  model: "gpt-4"
+  # API 端点（自定义时填写，留空则使用默认）
+  api_base: ""
+  # API Key
+  api_key: ""
+  # 请求超时（秒）
+  timeout: 60
+  # 温度
+  temperature: 0.3
+
+# MySQL 实例配置
+mysql:
+  # 自动发现本机 MySQL 实例
+  auto_discover: true
+  # 手动指定实例（当 auto_discover 为 false 或需要补充时使用）
+  instances:
+    # - name: "main"
+    #   log_path: "/var/log/mysql/error.log"
+    #   host: "localhost"
+    #   port: 3306
+    #   user: "root"
+    #   password: ""
+
+# 日志采集配置
+collector:
+  # 文件监控轮询间隔（秒）
+  watch_interval: 5
+  # 单次读取最大行数
+  batch_size: 1000
+  # GB 级日志流式处理的块大小（MB）
+  stream_chunk_size_mb: 10
+  # 全量分析警告阈值（MB），超过此大小会弹出警告
+  full_analysis_warning_mb: 500
+
+# 分析引擎配置
+analyzer:
+  # 后台自动分析开关
+  auto_analyze: true
+  # 自动分析间隔（秒）
+  auto_analyze_interval: 60
+  # 关键错误级别（触发主动推送）
+  critical_levels:
+    - "CRITICAL"
+    - "ERROR"
+  # 关键错误关键词
+  critical_keywords:
+    - "crash"
+    - "shutdown"
+    - "abort"
+    - "InnoDB: corruption"
+    - "replication"
+    - "slave_io_running"
+    - "deadlock"
+
+# 存储配置
+storage:
+  # SQLite 数据库路径
+  db_path: "./data/logs.db"
+  # 日志保留天数（0 为永久保留）
+  retention_days: 90
+
+# Web 服务配置
+web:
+  # 监听地址（默认仅本地）
+  host: "127.0.0.1"
+  # 端口
+  port: 8080
+  # 是否允许外部访问
+  allow_remote: false
+  # 外部访问时的认证配置
+  auth:
+    enabled: false
+    username: "admin"
+    # 密码哈希（启动时自动生成或手动设置）
+    password_hash: ""
+    # JWT 密钥（启动时自动生成）
+    jwt_secret: ""
+
+# CLI 配置
+cli:
+  # 提示符
+  prompt: "mysql-analyzer> "
+  # 历史记录文件
+  history_file: ".cli_history"
+
+# 程序状态配置
+status:
+  # 状态刷新间隔（秒）
+  refresh_interval: 10

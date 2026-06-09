@@ -1,0 +1,48 @@
+[Unit]
+Description=MySQL Error Log Analyzer - Web Service
+After=network.target
+
+[Service]
+Type=simple
+User=mysql-log-analyzer
+Group=mysql-log-analyzer
+WorkingDirectory=/opt/mysql-log-analyzer
+ExecStart=/usr/bin/python3 -m src.main --web --config /etc/mysql-log-analyzer/config.yaml
+Restart=on-failure
+RestartSec=5
+StandardOutput=journal
+StandardError=journal
+
+# 安全限制
+NoNewPrivileges=true
+ProtectSystem=strict
+ProtectHome=true
+ReadWritePaths=/opt/mysql-log-analyzer/data /var/log/mysql
+
+[Install]
+WantedBy=multi-user.target
+
+# ============================================================
+# 安装说明：
+#
+# 1. 将项目复制到 /opt/mysql-log-analyzer/
+# 2. 创建系统用户：
+#    sudo useradd -r -s /sbin/nologin mysql-log-analyzer
+# 3. 创建配置目录并复制配置文件：
+#    sudo mkdir -p /etc/mysql-log-analyzer
+#    sudo cp config/config.yaml.example /etc/mysql-log-analyzer/config.yaml
+#    sudo chown mysql-log-analyzer:mysql-log-analyzer /etc/mysql-log-analyzer/config.yaml
+# 4. 创建数据目录并设置权限：
+#    sudo mkdir -p /opt/mysql-log-analyzer/data
+#    sudo chown -R mysql-log-analyzer:mysql-log-analyzer /opt/mysql-log-analyzer
+# 5. 安装 Python 依赖：
+#    cd /opt/mysql-log-analyzer
+#    pip3 install -r requirements.txt
+# 6. 复制 service 文件并启用：
+#    sudo cp systemd/mysql-log-analyzer.service /etc/systemd/system/
+#    sudo systemctl daemon-reload
+#    sudo systemctl enable mysql-log-analyzer
+#    sudo systemctl start mysql-log-analyzer
+# 7. 查看日志：
+#    sudo journalctl -u mysql-log-analyzer -f
+# ============================================================
