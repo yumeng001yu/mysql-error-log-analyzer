@@ -101,3 +101,27 @@ cli:
 status:
   # 状态刷新间隔（秒）
   refresh_interval: 10
+
+# Embedding 配置（可选，启用后支持语义搜索）
+embedding:
+  # 是否启用向量搜索功能
+  enabled: false
+  # 提供商: ollama / openai / custom
+  provider: "ollama"
+  # 模型名称
+  model: "nomic-embed-text"
+  # API 端点
+  api_base: "http://localhost:11434"
+  # API Key（OpenAI/Custom 时需要）
+  api_key: ""
+  # 向量维度（需与模型匹配）
+  dim: 768
+  # 批量嵌入大小
+  batch_size: 32
+
+# 向量索引配置
+vector:
+  # 索引文件路径
+  index_path: "./data/vector_index.tq"
+  # 量化位宽（4 或 8，4 更省内存，8 更精确）
+  bit_width: 4

@@ -1,6 +1,7 @@
 """LangGraph 工作流 - 分析引擎核心"""
 
 import logging
+from datetime import datetime
 from typing import TypedDict
 
 from langgraph.graph import END, StateGraph
@@ -12,6 +13,7 @@ from src.analyzer.nodes.correlate_node import CorrelateNode
 from src.analyzer.nodes.parse_node import ParseNode
 from src.analyzer.nodes.summarize_node import SummarizeNode
 from src.config import Config
+from src.vector.manager import VectorSearchManager
 
 logger = logging.getLogger(__name__)
 
@@ -50,6 +52,9 @@ class AnalysisGraph:
         self._correlate_node = CorrelateNode()
         self._summarize_node = SummarizeNode(self._llm_manager)
         self._chat_node = ChatNode(self._llm_manager)
+
+        # 初始化向量搜索管理器（可选）
+        self._vector_manager = VectorSearchManager()
 
         # 构建分析工作流图
         self._analysis_graph = self._build_analysis_graph()
@@ -123,7 +128,7 @@ class AnalysisGraph:
         return result
 
     async def run_chat(self, messages: list[dict], context: dict = None) -> str:
-        """运行对话
+        """运行对话，支持 RAG 模式
 
         Args:
             messages: 对话历史 [{"role": "user/assistant", "content": "..."}]
@@ -134,9 +139,34 @@ class AnalysisGraph:
         """
         logger.info("开始对话: 消息数=%d", len(messages))
 
+        # RAG: 如果向量搜索可用，从用户最后一条消息中检索相关日志
+        rag_context = ""
+        if self._vector_manager.is_available() and messages:
+            last_user_msg = ""
+            for msg in reversed(messages):
+                if msg.get("role") == "user":
+                    last_user_msg = msg.get("content", "")
+                    break
+
+            if last_user_msg:
+                try:
+                    similar_logs = await self._vector_manager.search_similar(last_user_msg, k=5)
+                    if similar_logs:
+                        rag_context = "\n\n以下是可能与用户问题相关的日志记录：\n"
+                        for i, log in enumerate(similar_logs, 1):
+                            rag_context += f"{i}. [{log.get('timestamp', '')}] [{log.get('level', '')}] {log.get('message', '')}\n"
+                        logger.info("RAG 检索到 %d 条相关日志", len(similar_logs))
+                except Exception as e:
+                    logger.warning("RAG 检索失败: %s", e)
+
+        # 合并上下文
+        effective_context = context or {}
+        if rag_context:
+            effective_context["rag_logs"] = rag_context
+
         initial_state = {
             "messages": messages,
-            "context": context,
+            "context": effective_context if effective_context else None,
             "response": "",
         }
 
@@ -211,7 +241,32 @@ class AnalysisGraph:
         return "检测到关键错误，请尽快排查。"
 
     async def _load_logs(self, instance_id: str, time_range: dict) -> list[dict]:
-        """从存储加载日志（预留接口）"""
-        # TODO: 对接 storage 模块加载日志
-        logger.warning("日志加载功能尚未实现，请通过 raw_logs 参数传入日志")
-        return []
+        """从存储加载日志"""
+        try:
+            from src.storage.database import DatabaseManager
+            db = DatabaseManager()
+            start_time = time_range.get("start") if isinstance(time_range, dict) else None
+            end_time = time_range.get("end") if isinstance(time_range, dict) else None
+
+            if isinstance(start_time, datetime):
+                start_time = start_time.isoformat()
+            if isinstance(end_time, datetime):
+                end_time = end_time.isoformat()
+
+            logs = await db.query_logs(
+                start_time=start_time,
+                end_time=end_time,
+                limit=1000,
+            )
+
+            # 如果向量搜索可用，将日志索引
+            if self._vector_manager.is_available() and logs:
+                try:
+                    await self._vector_manager.index_logs(logs)
+                except Exception as e:
+                    logger.warning("向量索引日志失败: %s", e)
+
+            return logs
+        except Exception as e:
+            logger.warning("日志加载失败: %s", e)
+            return []

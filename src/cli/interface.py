@@ -27,6 +27,7 @@ from src.config import Config
 from src.notifier.alert import AlertNotifier
 from src.status import StatusTracker
 from src.storage.database import DatabaseManager
+from src.vector.manager import VectorSearchManager
 from src.utils import (
     format_time_range_display,
     get_auto_read_interval_hours,
@@ -38,7 +39,7 @@ logger = logging.getLogger(__name__)
 
 # 支持的命令列表
 _COMMANDS = [
-    "analyze", "recent", "search", "status",
+    "analyze", "recent", "search", "semantic", "status",
     "instances", "alerts", "help", "quit", "exit",
 ]
 
@@ -69,6 +70,7 @@ class CLIInterface:
         self._parser: LogParser | None = None
         self._notifier: AlertNotifier | None = None
         self._status: StatusTracker | None = None
+        self._vector_search: VectorSearchManager | None = None
 
         self._instances: list[dict] = []
         self._chat_messages: list[dict] = []
@@ -103,6 +105,14 @@ class CLIInterface:
             # 5. 初始化通知器并设置 CLI 回调
             self._notifier = AlertNotifier()
             self._notifier.set_cli_callback(self._on_alert)
+
+            # 初始化向量搜索（可选）
+            self._vector_search = VectorSearchManager()
+            if self._vector_search.is_available():
+                await self._vector_search.initialize()
+                self._console.print("[bold green]语义搜索已启用[/bold green]")
+            else:
+                self._console.print("[dim]语义搜索未启用（需配置 embedding）[/dim]")
 
             # 6. 初始化状态追踪器
             self._status = StatusTracker()
@@ -203,6 +213,10 @@ class CLIInterface:
         if self._status:
             self._status.stop()
 
+        # 关闭向量搜索
+        if self._vector_search:
+            await self._vector_search.close()
+
         # 关闭数据库
         if self._db:
             await self._db.close()
@@ -256,6 +270,8 @@ class CLIInterface:
                     await self._cmd_recent(args.strip())
                 elif command == "search":
                     await self._cmd_search(args.strip())
+                elif command == "semantic":
+                    await self._cmd_semantic(args.strip())
                 elif command == "status":
                     self._cmd_status()
                 elif command == "instances":
@@ -292,6 +308,7 @@ class CLIInterface:
             ("analyze [time_range]", "运行分析 (all/Nh/Nd，如 3h/5d，默认 all)"),
             ("recent [n]", "查看最近 N 条错误日志 (默认 20)"),
             ("search <keyword>", "搜索关键词相关日志"),
+            ("semantic <query>", "语义搜索日志（需配置 embedding）"),
             ("status", "查看程序运行状态"),
             ("instances", "查看监控的 MySQL 实例列表"),
             ("alerts", "查看未读关键错误告警"),
@@ -515,6 +532,52 @@ class CLIInterface:
             self._console.print(f"[red]搜索失败: {e}[/red]")
             logger.error("搜索失败: %s", e)
 
+    async def _cmd_semantic(self, query: str):
+        """语义搜索日志"""
+        if not query:
+            self._console.print("[red]请输入搜索内容: semantic <query>[/red]")
+            return
+
+        if not self._vector_search or not self._vector_search.is_available():
+            self._console.print("[yellow]语义搜索未启用，请在配置中启用 embedding[/yellow]")
+            return
+
+        with self._console.status("[bold cyan]语义搜索中...[/bold cyan]"):
+            try:
+                results = await self._vector_search.search_similar(query, k=10)
+
+                if not results:
+                    self._console.print(f"[dim]未找到与 '{query}' 语义相似的日志[/dim]")
+                    return
+
+                table = Table(
+                    title=f"语义搜索结果: '{query}' ({len(results)} 条)",
+                    show_header=True,
+                    header_style="bold cyan",
+                )
+                table.add_column("相似度", width=10)
+                table.add_column("时间", width=22)
+                table.add_column("级别", width=10)
+                table.add_column("消息", width=50)
+
+                for log in results:
+                    score = log.get("score", 0)
+                    score_display = f"{score:.3f}" if isinstance(score, float) else str(score)
+                    level = log.get("level", "")
+                    level_style = self._level_style(level)
+                    table.add_row(
+                        score_display,
+                        str(log.get("timestamp", "")),
+                        f"[{level_style}]{level}[/{level_style}]",
+                        str(log.get("message", "") or "")[:80],
+                    )
+
+                self._console.print(table)
+
+            except Exception as e:
+                self._console.print(f"[red]语义搜索失败: {e}[/red]")
+                logger.error("语义搜索失败: %s", e)
+
     def _cmd_status(self):
         """查看程序运行状态"""
         if not self._status:
@@ -721,6 +784,13 @@ class CLIInterface:
             # 更新状态
             if self._status:
                 self._status.increment_logs(len(entries))
+
+            # 向量索引新日志
+            if self._vector_search and self._vector_search.is_available() and parsed:
+                try:
+                    await self._vector_search.index_logs(entries)
+                except Exception as e:
+                    logger.warning("向量索引日志失败: %s", e)
 
         # 检查关键错误并通知
         if self._notifier and parsed:

@@ -55,6 +55,10 @@ export const api = {
   getLogTrend(params) {
     return http.get('/logs/trend', { params })
   },
+  // 语义搜索
+  semanticSearch(params) {
+    return http.get('/logs/semantic', { params })
+  },
 
   // 分析
   runAnalysis(data) {

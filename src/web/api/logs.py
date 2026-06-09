@@ -7,6 +7,7 @@ from pydantic import BaseModel
 
 from src.config import Config
 from src.storage.database import DatabaseManager
+from src.vector.manager import VectorSearchManager
 from src.web.api.auth import get_current_user
 
 router = APIRouter(prefix="/api/logs", tags=["日志"])
@@ -64,12 +65,21 @@ class TrendResponse(BaseModel):
 
 _db: DatabaseManager | None = None
 
+_vector_search: VectorSearchManager | None = None
+
 
 def _get_db() -> DatabaseManager:
     global _db
     if _db is None:
         _db = DatabaseManager()
     return _db
+
+
+def _get_vector_search() -> VectorSearchManager:
+    global _vector_search
+    if _vector_search is None:
+        _vector_search = VectorSearchManager()
+    return _vector_search
 
 
 # ── API 端点 ────────────────────────────────────────────────
@@ -180,3 +190,21 @@ async def log_trend(
     ]
 
     return TrendResponse(interval=interval, data=buckets)
+
+
+@router.get("/semantic")
+async def semantic_search(
+    query: str = Query(..., description="语义搜索查询"),
+    k: int = Query(10, ge=1, le=100, description="返回数量"),
+    user: Optional[str] = Depends(get_current_user),
+):
+    """语义搜索日志 - 基于向量相似度"""
+    vs = _get_vector_search()
+    if not vs.is_available():
+        return {"items": [], "message": "语义搜索未启用，请在配置中启用 embedding"}
+
+    try:
+        results = await vs.search_similar(query, k=k)
+        return {"items": results, "total": len(results)}
+    except Exception as e:
+        return {"items": [], "message": f"语义搜索失败: {str(e)}"}

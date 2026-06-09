@@ -18,6 +18,11 @@
       </div>
     </div>
 
+    <div class="semantic-search-bar" v-if="semanticEnabled">
+      <input type="text" v-model="semanticQuery" placeholder="语义搜索日志..." class="semantic-input" @keydown.enter="doSemanticSearch" />
+      <button class="btn-semantic" @click="doSemanticSearch" :disabled="!semanticQuery">🔍</button>
+    </div>
+
     <!-- 统计卡片 -->
     <div class="stat-cards">
       <div class="stat-card">
@@ -234,6 +239,22 @@ export default {
       } catch (e) { /* ignore */ }
     }
 
+    const semanticEnabled = ref(true)
+    const semanticQuery = ref('')
+
+    async function doSemanticSearch() {
+      if (!semanticQuery.value) return
+      try {
+        const res = await api.semanticSearch({ query: semanticQuery.value, k: 10 })
+        const data = res.data || {}
+        if (data.message && !data.items?.length) {
+          semanticEnabled.value = false
+        }
+      } catch (e) {
+        semanticEnabled.value = false
+      }
+    }
+
     function changePeriod(p) {
       period.value = p
       loadStats()
@@ -287,6 +308,7 @@ export default {
       period, customValue, customUnit, trendGroup, stats, alerts,
       periods, trendGroups,
       levelPieRef, categoryBarRef, trendLineRef,
+      semanticEnabled, semanticQuery, doSemanticSearch,
       formatTime, changePeriod, applyCustomPeriod, loadTrend
     }
   }
@@ -361,6 +383,43 @@ export default {
   background: var(--accent-blue);
   color: #fff;
   border-color: var(--accent-blue);
+}
+
+.semantic-search-bar {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+}
+
+.semantic-input {
+  flex: 1;
+  max-width: 300px;
+  padding: 6px 12px;
+  background: var(--bg-secondary);
+  border: 1px solid var(--border-color);
+  border-radius: 4px;
+  color: var(--text-primary);
+  font-size: 13px;
+  outline: none;
+}
+
+.semantic-input:focus {
+  border-color: var(--accent-purple, #8b5cf6);
+}
+
+.btn-semantic {
+  padding: 6px 12px;
+  background: var(--accent-purple, #8b5cf6);
+  color: #fff;
+  border: none;
+  border-radius: 4px;
+  cursor: pointer;
+  font-size: 13px;
+}
+
+.btn-semantic:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
 }
 
 .stat-cards {

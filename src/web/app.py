@@ -111,6 +111,16 @@ def create_app() -> FastAPI:
                 logger.warning("启动日志监控失败: %s", e)
 
         # 标记状态运行中
+        # 初始化向量搜索（可选）
+        try:
+            from src.vector.manager import VectorSearchManager
+            vs = VectorSearchManager()
+            if vs.is_available():
+                await vs.initialize()
+                logger.info("语义搜索已启用")
+        except Exception as e:
+            logger.info("语义搜索未启用: %s", e)
+
         StatusTracker().start()
         logger.info("应用启动完成")
 
@@ -128,6 +138,15 @@ def create_app() -> FastAPI:
                 logger.warning("停止日志监控失败: %s", e)
 
         # 关闭数据库
+        # 关闭向量搜索
+        try:
+            from src.vector.manager import VectorSearchManager
+            vs = VectorSearchManager()
+            if vs.is_available():
+                await vs.close()
+        except Exception:
+            pass
+
         if _db is not None:
             try:
                 await _db.close()

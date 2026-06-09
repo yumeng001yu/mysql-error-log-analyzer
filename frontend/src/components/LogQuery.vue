@@ -45,6 +45,7 @@
           <option value="30d">最近30天</option>
         </select>
       </div>
+      <button class="btn-semantic" @click="semanticSearch" :disabled="!filters.keyword">🔍 语义搜索</button>
       <button class="btn-primary" @click="search">查询</button>
       <button class="btn-secondary" @click="exportLogs">导出</button>
     </div>
@@ -228,6 +229,28 @@ export default {
       } catch (e) { /* ignore */ }
     }
 
+    async function semanticSearch() {
+      const query = filters.value.keyword
+      if (!query) return
+
+      try {
+        const res = await api.semanticSearch({ query, k: 20 })
+        const data = res.data || {}
+        if (data.items && data.items.length > 0) {
+          logs.value = data.items
+          total.value = data.total || data.items.length
+        } else {
+          logs.value = []
+          total.value = 0
+          if (data.message) {
+            alert(data.message)
+          }
+        }
+      } catch (e) {
+        logs.value = []
+      }
+    }
+
     function exportLogs() {
       const header = '时间,实例,级别,消息\n'
       const rows = logs.value.map(l =>
@@ -251,7 +274,7 @@ export default {
     return {
       instances, logs, total, page, pageSize, totalPages,
       expanded, sortKey, sortAsc, filters,
-      formatTime, truncate, toggleExpand, sortBy, search, exportLogs, applyPeriod
+      formatTime, truncate, toggleExpand, sortBy, search, semanticSearch, exportLogs, applyPeriod
     }
   }
 }
@@ -310,6 +333,25 @@ export default {
   border-radius: 4px;
   cursor: pointer;
   font-size: 13px;
+}
+
+.btn-semantic {
+  padding: 6px 20px;
+  background: var(--accent-purple, #8b5cf6);
+  color: #fff;
+  border: none;
+  border-radius: 4px;
+  cursor: pointer;
+  font-size: 13px;
+}
+
+.btn-semantic:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
+
+.btn-semantic:hover:not(:disabled) {
+  opacity: 0.9;
 }
 
 .btn-secondary {
