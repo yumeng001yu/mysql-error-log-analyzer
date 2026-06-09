@@ -72,7 +72,7 @@ async def run_web_only(config: Config, host: str, port: int):
     import uvicorn
     from src.web.app import create_app
 
-    app = create_app(config)
+    app = create_app()
     logger.info(f"Web 服务启动: http://{host}:{port}")
     config_server = uvicorn.Config(
         app,
@@ -96,7 +96,7 @@ async def run_both(config: Config, host: str, port: int):
     from src.cli.interface import CLIInterface
     from src.web.app import create_app
 
-    app = create_app(config)
+    app = create_app()
     config_server = uvicorn.Config(
         app,
         host=host,

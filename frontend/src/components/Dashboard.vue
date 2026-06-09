@@ -8,6 +8,14 @@
         :class="['period-btn', { active: period === p.value }]"
         @click="changePeriod(p.value)"
       >{{ p.label }}</button>
+      <div class="custom-period">
+        <input type="number" v-model.number="customValue" min="1" max="365" placeholder="自定义" class="custom-input" />
+        <select v-model="customUnit" class="custom-select">
+          <option value="h">小时</option>
+          <option value="d">天</option>
+        </select>
+        <button class="period-btn" @click="applyCustomPeriod" :disabled="!customValue || customValue < 1">应用</button>
+      </div>
     </div>
 
     <!-- 统计卡片 -->
@@ -92,6 +100,8 @@ export default {
   name: 'Dashboard',
   setup() {
     const period = ref('7d')
+    const customValue = ref(null)
+    const customUnit = ref('h')
     const trendGroup = ref('hour')
     const stats = ref({})
     const alerts = ref([])
@@ -122,8 +132,7 @@ export default {
     }
 
     function getPeriodParam() {
-      const map = { 'all': '', '7d': '7d', '24h': '24h', '1h': '1h' }
-      return map[period.value] || ''
+      return period.value === 'all' ? '' : period.value
     }
 
     async function loadStats() {
@@ -232,6 +241,15 @@ export default {
       loadTrend()
     }
 
+    function applyCustomPeriod() {
+      if (customValue.value && customValue.value > 0) {
+        period.value = `${customValue.value}${customUnit.value}`
+        loadStats()
+        loadDistribution()
+        loadTrend()
+      }
+    }
+
     function handleResize() {
       levelPieChart?.resize()
       categoryBarChart?.resize()
@@ -266,10 +284,10 @@ export default {
     })
 
     return {
-      period, trendGroup, stats, alerts,
+      period, customValue, customUnit, trendGroup, stats, alerts,
       periods, trendGroups,
       levelPieRef, categoryBarRef, trendLineRef,
-      formatTime, changePeriod, loadTrend
+      formatTime, changePeriod, applyCustomPeriod, loadTrend
     }
   }
 }
@@ -285,6 +303,42 @@ export default {
 .period-selector {
   display: flex;
   gap: 8px;
+  align-items: center;
+}
+
+.custom-period {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin-left: 8px;
+  padding-left: 12px;
+  border-left: 1px solid var(--border-color);
+}
+
+.custom-input {
+  width: 60px;
+  padding: 6px 8px;
+  background: var(--bg-secondary);
+  border: 1px solid var(--border-color);
+  border-radius: 4px;
+  color: var(--text-primary);
+  font-size: 13px;
+  outline: none;
+  text-align: center;
+}
+
+.custom-input:focus {
+  border-color: var(--accent-blue);
+}
+
+.custom-select {
+  padding: 6px 8px;
+  background: var(--bg-secondary);
+  border: 1px solid var(--border-color);
+  border-radius: 4px;
+  color: var(--text-primary);
+  font-size: 13px;
+  outline: none;
 }
 
 .period-btn {

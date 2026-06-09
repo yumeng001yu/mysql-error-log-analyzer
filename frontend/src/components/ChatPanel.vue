@@ -70,6 +70,8 @@ export default {
 
     const quickActions = [
       { label: '📊 分析最近1小时', text: '分析最近1小时的错误日志' },
+      { label: '📊 分析最近3小时', text: '分析最近3小时的错误日志' },
+      { label: '📊 分析最近24小时', text: '分析最近24小时的错误日志' },
       { label: '🔒 查看死锁信息', text: '查看最近的死锁信息' },
       { label: '⚠️ 关键告警', text: '当前有哪些关键告警？' },
       { label: '💡 修复建议', text: '给出最近的错误修复建议' }

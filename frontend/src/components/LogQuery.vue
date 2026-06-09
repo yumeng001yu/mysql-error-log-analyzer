@@ -32,6 +32,19 @@
         <label>关键词</label>
         <input type="text" v-model="filters.keyword" placeholder="搜索关键词" />
       </div>
+      <div class="filter-group">
+        <label>快捷时段</label>
+        <select v-model="filters.period" @change="applyPeriod">
+          <option value="">自定义时间</option>
+          <option value="1h">最近1小时</option>
+          <option value="3h">最近3小时</option>
+          <option value="5h">最近5小时</option>
+          <option value="12h">最近12小时</option>
+          <option value="24h">最近24小时</option>
+          <option value="7d">最近7天</option>
+          <option value="30d">最近30天</option>
+        </select>
+      </div>
       <button class="btn-primary" @click="search">查询</button>
       <button class="btn-secondary" @click="exportLogs">导出</button>
     </div>
@@ -118,7 +131,8 @@ export default {
       level: '',
       start_time: '',
       end_time: '',
-      keyword: ''
+      keyword: '',
+      period: ''
     })
 
     const totalPages = computed(() => Math.max(1, Math.ceil(total.value / pageSize.value)))
@@ -145,6 +159,40 @@ export default {
         sortKey.value = key
         sortAsc.value = false
       }
+      search()
+    }
+
+    function applyPeriod() {
+      const p = filters.value.period
+      if (!p) return
+
+      const now = new Date()
+      let start = new Date()
+
+      const match = p.match(/^(\d+)(h|d)$/)
+      if (match) {
+        const value = parseInt(match[1])
+        const unit = match[2]
+        if (unit === 'h') {
+          start.setHours(start.getHours() - value)
+        } else {
+          start.setDate(start.getDate() - value)
+        }
+      } else if (p === 'all') {
+        start = new Date(2000, 0, 1)
+      }
+
+      // 格式化为 datetime-local 格式
+      const format = (d) => {
+        return d.getFullYear() + '-' +
+          String(d.getMonth() + 1).padStart(2, '0') + '-' +
+          String(d.getDate()).padStart(2, '0') + 'T' +
+          String(d.getHours()).padStart(2, '0') + ':' +
+          String(d.getMinutes()).padStart(2, '0')
+      }
+
+      filters.value.start_time = format(start)
+      filters.value.end_time = format(now)
       search()
     }
 
@@ -203,7 +251,7 @@ export default {
     return {
       instances, logs, total, page, pageSize, totalPages,
       expanded, sortKey, sortAsc, filters,
-      formatTime, truncate, toggleExpand, sortBy, search, exportLogs
+      formatTime, truncate, toggleExpand, sortBy, search, exportLogs, applyPeriod
     }
   }
 }

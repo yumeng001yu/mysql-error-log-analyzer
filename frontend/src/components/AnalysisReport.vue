@@ -4,13 +4,25 @@
     <div class="action-bar">
       <div class="time-range">
         <label>分析时间段：</label>
-        <select v-model="analysisPeriod">
+        <select v-model="analysisPeriod" @change="onPeriodSelect">
           <option value="1h">最近1小时</option>
+          <option value="3h">最近3小时</option>
+          <option value="5h">最近5小时</option>
+          <option value="12h">最近12小时</option>
           <option value="24h">最近24小时</option>
+          <option value="3d">最近3天</option>
           <option value="7d">最近7天</option>
           <option value="30d">最近30天</option>
           <option value="all">全量分析</option>
+          <option value="custom">自定义...</option>
         </select>
+        <div v-if="analysisPeriod === 'custom'" class="custom-range">
+          <input type="number" v-model.number="customValue" min="1" max="365" placeholder="数值" class="custom-input" />
+          <select v-model="customUnit" class="custom-select">
+            <option value="h">小时</option>
+            <option value="d">天</option>
+          </select>
+        </div>
       </div>
       <button class="btn-primary" @click="confirmRunAnalysis" :disabled="analyzing">
         {{ analyzing ? '分析中...' : '🔍 触发分析' }}
@@ -98,6 +110,8 @@ export default {
   name: 'AnalysisReport',
   setup() {
     const analysisPeriod = ref('24h')
+    const customValue = ref(3)
+    const customUnit = ref('h')
     const analyzing = ref(false)
     const showConfirm = ref(false)
     const result = ref(null)
@@ -111,8 +125,21 @@ export default {
       }
     }
 
+    function onPeriodSelect() {
+      if (analysisPeriod.value !== 'custom') {
+        customValue.value = null
+      }
+    }
+
+    function getEffectivePeriod() {
+      if (analysisPeriod.value === 'custom' && customValue.value && customValue.value > 0) {
+        return `${customValue.value}${customUnit.value}`
+      }
+      return analysisPeriod.value
+    }
+
     function confirmRunAnalysis() {
-      if (analysisPeriod.value === 'all') {
+      if (getEffectivePeriod() === 'all') {
         showConfirm.value = true
       } else {
         runAnalysis()
@@ -122,13 +149,14 @@ export default {
     async function runAnalysis() {
       showConfirm.value = false
       analyzing.value = true
+      const effectivePeriod = getEffectivePeriod()
       try {
-        await api.runAnalysis({ period: analysisPeriod.value })
+        await api.runAnalysis({ period: effectivePeriod })
         // 轮询获取结果
         let attempts = 0
         const poll = async () => {
           try {
-            const res = await api.getAnalysisResults({ period: analysisPeriod.value })
+            const res = await api.getAnalysisResults({ period: effectivePeriod })
             const data = res.data
             if (data && (data.summary || data.content || data.suggestions)) {
               result.value = data
@@ -169,8 +197,8 @@ export default {
     })
 
     return {
-      analysisPeriod, analyzing, showConfirm, result,
-      renderMarkdown, confirmRunAnalysis, runAnalysis
+      analysisPeriod, customValue, customUnit, analyzing, showConfirm, result,
+      renderMarkdown, confirmRunAnalysis, runAnalysis, onPeriodSelect
     }
   }
 }
@@ -206,6 +234,38 @@ export default {
 
 .time-range select {
   padding: 6px 10px;
+  background: var(--bg-secondary);
+  border: 1px solid var(--border-color);
+  border-radius: 4px;
+  color: var(--text-primary);
+  font-size: 13px;
+  outline: none;
+}
+
+.custom-range {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.custom-input {
+  width: 60px;
+  padding: 6px 8px;
+  background: var(--bg-secondary);
+  border: 1px solid var(--border-color);
+  border-radius: 4px;
+  color: var(--text-primary);
+  font-size: 13px;
+  outline: none;
+  text-align: center;
+}
+
+.custom-input:focus {
+  border-color: var(--accent-blue);
+}
+
+.custom-select {
+  padding: 6px 8px;
   background: var(--bg-secondary);
   border: 1px solid var(--border-color);
   border-radius: 4px;

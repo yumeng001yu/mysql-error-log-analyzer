@@ -1,6 +1,5 @@
 """分析接口模块"""
 
-from datetime import datetime, timedelta, timezone
 from typing import Any, Optional
 
 from fastapi import APIRouter, Depends, HTTPException
@@ -8,6 +7,7 @@ from pydantic import BaseModel
 
 from src.config import Config
 from src.storage.database import DatabaseManager
+from src.utils import is_valid_time_range, parse_time_range
 from src.web.api.auth import get_current_user
 
 router = APIRouter(prefix="/api", tags=["分析"])
@@ -17,7 +17,7 @@ router = APIRouter(prefix="/api", tags=["分析"])
 
 class AnalysisRunRequest(BaseModel):
     instance_id: str
-    time_range: str = "7d"  # all | 7d | 24h | 1h
+    time_range: str = "7d"  # all | Nh(如3h) | Nd(如3d)
     confirm_large_analysis: bool = False
 
 
@@ -57,27 +57,6 @@ class ChatResponse(BaseModel):
     response: str
 
 
-# ── 工具函数 ────────────────────────────────────────────────
-
-def _parse_time_range(time_range: str) -> tuple[str, str]:
-    """将 time_range 字符串转换为 (start_time, end_time) ISO 格式"""
-    now = datetime.now(timezone.utc)
-    end = now.isoformat()
-
-    if time_range == "1h":
-        start = (now - timedelta(hours=1)).isoformat()
-    elif time_range == "24h":
-        start = (now - timedelta(hours=24)).isoformat()
-    elif time_range == "7d":
-        start = (now - timedelta(days=7)).isoformat()
-    elif time_range == "all":
-        start = ""
-    else:
-        start = (now - timedelta(days=7)).isoformat()
-
-    return start, end
-
-
 # ── 数据库实例 ──────────────────────────────────────────────
 
 _db: DatabaseManager | None = None
@@ -101,7 +80,14 @@ async def run_analysis(
     config = Config()
     db = _get_db()
 
-    start_time, end_time = _parse_time_range(body.time_range)
+    # 验证时间范围格式
+    if not is_valid_time_range(body.time_range):
+        raise HTTPException(
+            status_code=400,
+            detail=f"无效的时间范围: {body.time_range}，格式: Nh(如3h) 或 Nd(如3d) 或 all",
+        )
+
+    start_time, end_time = parse_time_range(body.time_range)
 
     # 全量分析时检查日志大小
     if body.time_range == "all" and not body.confirm_large_analysis:

@@ -45,6 +45,13 @@ analyzer:
   auto_analyze: true
   # 自动分析间隔（秒）
   auto_analyze_interval: 60
+  # 默认分析时间段（用于自动分析）
+  default_time_range: "1h"
+  # 智能读取间隔说明：
+  # 时间段 <= 24h 时，读取间隔 = 时间段
+  # 时间段 > 24h 时，读取间隔 = 24h
+  # 例如：default_time_range: "3h" 则每3小时自动读取
+  #       default_time_range: "7d" 则每24小时自动读取
   # 关键错误级别（触发主动推送）
   critical_levels:
     - "CRITICAL"

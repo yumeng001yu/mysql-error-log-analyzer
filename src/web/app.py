@@ -69,13 +69,14 @@ def create_app() -> FastAPI:
                 logger.info("自动发现 %d 个 MySQL 实例", len(instances))
 
                 # 将发现的实例写入数据库
+                conn = await _db._get_conn()
                 for inst in instances:
-                    await _db._get_conn().execute(
+                    await conn.execute(
                         """INSERT OR IGNORE INTO instances (name, log_path, host, port, created_at)
                            VALUES (?, ?, ?, ?, datetime('now'))""",
                         (inst["name"], inst["log_path"], inst.get("host", "localhost"), inst.get("port", 3306)),
                     )
-                await _db._get_conn().commit()
+                await conn.commit()
             except Exception as e:
                 logger.warning("自动发现 MySQL 实例失败: %s", e)
 

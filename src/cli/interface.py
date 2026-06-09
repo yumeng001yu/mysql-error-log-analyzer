@@ -4,7 +4,6 @@ import asyncio
 import logging
 import os
 import sys
-from datetime import datetime, timedelta
 from pathlib import Path
 from typing import Any
 
@@ -28,6 +27,12 @@ from src.config import Config
 from src.notifier.alert import AlertNotifier
 from src.status import StatusTracker
 from src.storage.database import DatabaseManager
+from src.utils import (
+    format_time_range_display,
+    get_auto_read_interval_hours,
+    is_valid_time_range,
+    parse_time_range_datetime,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -38,7 +43,7 @@ _COMMANDS = [
 ]
 
 # analyze 子命令的 time_range 选项
-_TIME_RANGES = ["all", "7d", "24h", "1h"]
+_TIME_RANGES = ["all", "7d", "24h", "1h", "3h", "5h", "12h", "3d"]
 
 
 def _format_uptime(seconds: float) -> str:
@@ -50,21 +55,6 @@ def _format_uptime(seconds: float) -> str:
     if minutes > 0:
         return f"{minutes}m {secs}s"
     return f"{secs}s"
-
-
-def _parse_time_range(time_range: str) -> dict:
-    """将 time_range 字符串转换为 {start, end} 字典"""
-    now = datetime.now()
-    if time_range == "1h":
-        start = now - timedelta(hours=1)
-    elif time_range == "24h":
-        start = now - timedelta(hours=24)
-    elif time_range == "7d":
-        start = now - timedelta(days=7)
-    else:  # all
-        start = datetime(2000, 1, 1)
-
-    return {"start": start, "end": now}
 
 
 class CLIInterface:
@@ -299,7 +289,7 @@ class CLIInterface:
         table.add_column("说明", width=60)
 
         commands_info = [
-            ("analyze [time_range]", "运行分析 (all/7d/24h/1h，默认 all)"),
+            ("analyze [time_range]", "运行分析 (all/Nh/Nd，如 3h/5d，默认 all)"),
             ("recent [n]", "查看最近 N 条错误日志 (默认 20)"),
             ("search <keyword>", "搜索关键词相关日志"),
             ("status", "查看程序运行状态"),
@@ -319,9 +309,9 @@ class CLIInterface:
 
     async def _cmd_analyze(self, time_range: str = "all"):
         """运行分析"""
-        if time_range and time_range not in _TIME_RANGES:
+        if time_range and not is_valid_time_range(time_range):
             self._console.print(
-                f"[red]无效的时间范围: {time_range}，可选值: {', '.join(_TIME_RANGES)}[/red]"
+                f"[red]无效的时间范围: {time_range}，格式: Nh(如3h) 或 Nd(如3d) 或 all[/red]"
             )
             return
 
@@ -364,7 +354,7 @@ class CLIInterface:
                     return
 
         # 执行分析
-        time_range_dict = _parse_time_range(time_range)
+        time_range_dict = parse_time_range_datetime(time_range)
 
         if not self._instances:
             self._console.print("[yellow]没有可分析的 MySQL 实例[/yellow]")
@@ -742,16 +732,23 @@ class CLIInterface:
 
     # ── 自动分析循环 ──────────────────────────────────────────
 
-    async def _auto_analyze_loop(self, interval: int):
-        """自动分析循环"""
+    async def _auto_analyze_loop(self, base_interval: int):
+        """自动分析循环，根据时间段智能调整读取间隔"""
         try:
             while self._running:
-                await asyncio.sleep(interval)
+                # 获取配置的时间范围
+                time_range_str = self._config.get("analyzer", "default_time_range", default="1h")
+                interval_hours = get_auto_read_interval_hours(time_range_str)
+                interval_seconds = int(interval_hours * 3600)
+                # 使用配置的间隔和计算出的间隔中较小的一个
+                actual_interval = min(base_interval, interval_seconds)
+
+                await asyncio.sleep(actual_interval)
                 if not self._running or not self._instances:
                     continue
 
                 try:
-                    time_range = _parse_time_range("1h")
+                    time_range = parse_time_range_datetime(time_range_str)
                     for inst in self._instances:
                         instance_id = inst.get("name", "unknown")
                         result = await self._analyzer.run_analysis(
