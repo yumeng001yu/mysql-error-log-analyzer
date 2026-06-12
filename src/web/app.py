@@ -88,14 +88,28 @@ def create_app() -> FastAPI:
 
                 parser = LogParser()
 
+                # 构建实例名称到数据库ID的映射
+                instance_id_map: dict[str, int] = {}
+                for inst in instances:
+                    name = inst.get("name", "unknown")
+                    # 查询数据库获取实例ID
+                    conn = await _db._get_conn()
+                    cursor = await conn.execute(
+                        "SELECT id FROM instances WHERE name = ?", (name,)
+                    )
+                    row = await cursor.fetchone()
+                    if row:
+                        instance_id_map[name] = row[0]
+
                 async def on_log_change(instance_id: str, new_lines: list[str]):
                     """日志变化回调"""
                     try:
                         entries = []
+                        db_id = instance_id_map.get(instance_id)
                         for line in new_lines:
                             parsed = parser.parse_line(line)
                             if parsed:
-                                parsed["instance_id"] = instance_id
+                                parsed["instance_id"] = db_id
                                 entries.append(parsed)
                         if entries:
                             await _db.insert_log_entries(entries)

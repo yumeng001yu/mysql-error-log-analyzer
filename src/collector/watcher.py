@@ -133,6 +133,20 @@ class LogWatcher:
             reader.position = file_size
             self._readers[instance_id] = reader
 
+            # 先读取已有日志（初始加载）
+            try:
+                existing_lines = []
+                async for chunk in reader.read_from_beginning():
+                    lines = chunk.splitlines()
+                    existing_lines.extend(lines)
+                if existing_lines:
+                    logger.info("初始加载实例 %s 的已有日志: %d 行", instance_id, len(existing_lines))
+                    await self._callback(instance_id, existing_lines)
+                # 加载完成后重置位置到文件末尾，避免重复读取
+                reader.position = await reader.get_file_size()
+            except Exception as e:
+                logger.warning("初始加载实例 %s 的日志失败: %s", instance_id, e)
+
             # 创建事件处理器
             handler = _LogEventHandler(
                 instance_id=instance_id,
