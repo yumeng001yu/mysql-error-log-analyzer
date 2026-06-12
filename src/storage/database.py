@@ -59,6 +59,7 @@ class DatabaseManager:
                 level TEXT NOT NULL,
                 error_code TEXT,
                 thread_id TEXT,
+                category TEXT DEFAULT 'other',
                 message TEXT,
                 raw_line TEXT,
                 created_at TEXT NOT NULL,
@@ -100,6 +101,8 @@ class DatabaseManager:
                 ON log_entries(instance_id, timestamp);
             CREATE INDEX IF NOT EXISTS idx_log_entries_instance_level
                 ON log_entries(instance_id, level);
+            CREATE INDEX IF NOT EXISTS idx_log_entries_category
+                ON log_entries(category);
 
             CREATE INDEX IF NOT EXISTS idx_analysis_results_instance_id
                 ON analysis_results(instance_id);
@@ -134,6 +137,7 @@ class DatabaseManager:
                 entry.get("level", ""),
                 entry.get("error_code"),
                 entry.get("thread_id"),
+                entry.get("category", "other"),
                 entry.get("message"),
                 entry.get("raw_line"),
                 entry.get("created_at", now),
@@ -141,8 +145,8 @@ class DatabaseManager:
 
         await conn.executemany(
             """INSERT INTO log_entries
-               (instance_id, timestamp, level, error_code, thread_id, message, raw_line, created_at)
-               VALUES (?, ?, ?, ?, ?, ?, ?, ?)""",
+               (instance_id, timestamp, level, error_code, thread_id, category, message, raw_line, created_at)
+               VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)""",
             rows,
         )
         await conn.commit()
@@ -465,29 +469,14 @@ class DatabaseManager:
         )
         by_error_code = [dict(row) for row in await cursor.fetchall()]
 
-        # 按分析类别分布
-        analysis_conditions = []
-        analysis_params: list[Any] = []
-
-        if instance_id is not None:
-            analysis_conditions.append("instance_id = ?")
-            analysis_params.append(instance_id)
-        if start_time is not None:
-            analysis_conditions.append("time_range_start >= ?")
-            analysis_params.append(start_time)
-        if end_time is not None:
-            analysis_conditions.append("time_range_end <= ?")
-            analysis_params.append(end_time)
-
-        analysis_where = " AND ".join(analysis_conditions) if analysis_conditions else "1=1"
-
+        # 按日志类别分布（从 log_entries 的 category 字段）
         cursor = await conn.execute(
             f"""SELECT category, COUNT(*) as count
-                FROM analysis_results
-                WHERE {analysis_where}
+                FROM log_entries
+                WHERE {where_clause}
                 GROUP BY category
                 ORDER BY count DESC""",
-            analysis_params,
+            params,
         )
         by_category = [dict(row) for row in await cursor.fetchall()]
 

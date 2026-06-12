@@ -110,6 +110,9 @@ def create_app() -> FastAPI:
                             parsed = parser.parse_line(line)
                             if parsed:
                                 parsed["instance_id"] = db_id
+                                parsed["category"] = parser.classify_error(
+                                    parsed.get("message", ""), parsed.get("error_code")
+                                )
                                 entries.append(parsed)
                         if entries:
                             await _db.insert_log_entries(entries)

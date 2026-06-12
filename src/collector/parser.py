@@ -7,13 +7,16 @@ from typing import Any
 logger = logging.getLogger(__name__)
 
 # MySQL 8.0+ 新格式:
+# 2024-01-15T10:30:45.123456Z 123 [Note] [MY-010914] [Server] Aborted connection 45 to db: 'test'
 # 2024-01-15T10:30:45.123456Z 123 [Note] [MY-010914] Aborted connection 45 to db: 'test'
 _NEW_FORMAT_RE = re.compile(
     r"^(\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(?:\.\d+)?Z?)\s+"
     r"(\d+)\s+"
     r"\[(Note|Warning|Error|System|Fatal)\]\s+"
     r"\[(MY-\d+)\]\s+"
-    r"(.*)"
+    r"(?:\[[^\]]*\]\s+)?"  # 可选的子系统标签，如 [InnoDB] [Server]
+    r"(.*)",
+    re.IGNORECASE,
 )
 
 # MySQL 5.7 及更早格式:
@@ -23,7 +26,8 @@ _OLD_FORMAT_RE = re.compile(
     r"^(\d{4}-\d{2}-\d{2}\s+\d{2}:\d{2}:\d{2})\s+"
     r"((?:\d+|[\w]+)\s+)?"
     r"\[(Note|Warning|Error|System|Fatal)\]\s+"
-    r"(.*)"
+    r"(.*)",
+    re.IGNORECASE,
 )
 
 # 旧格式无级别（如 mysqld_safe 行）
