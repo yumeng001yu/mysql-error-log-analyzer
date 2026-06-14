@@ -168,4 +168,26 @@ export default {
   opacity: 0.5;
   cursor: not-allowed;
 }
+
+/* ── 移动端适配 ────────────────────────────────────────── */
+@media (max-width: 768px) {
+  .login-card {
+    width: 95vw;
+    padding: 28px 20px;
+    margin: 0 12px;
+  }
+
+  .login-header h1 {
+    font-size: 18px;
+  }
+
+  .form-group input {
+    font-size: 16px; /* 防止 iOS 自动缩放 */
+  }
+
+  .login-btn {
+    font-size: 16px;
+    padding: 12px;
+  }
+}
 </style>

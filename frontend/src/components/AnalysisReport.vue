@@ -47,6 +47,13 @@
       <span>正在分析日志，请稍候...</span>
     </div>
 
+    <!-- 错误提示 -->
+    <div class="error-bar" v-if="errorMessage">
+      <span class="error-icon">⚠️</span>
+      <span>{{ errorMessage }}</span>
+      <button class="error-dismiss" @click="errorMessage = ''">✕</button>
+    </div>
+
     <!-- 分析结果 -->
     <div v-if="result" class="report-content">
       <!-- 整体摘要 -->
@@ -61,10 +68,10 @@
         <div class="suggestion-list">
           <div v-for="(s, idx) in result.suggestions" :key="idx" class="suggestion-item">
             <div class="suggestion-header">
-              <span class="priority-badge" :class="s.priority || 'medium'">{{ s.priority || '中' }}</span>
+              <span class="priority-badge" :class="s.priority || 'medium'">{{ priorityLabel(s.priority) }}</span>
               <span class="suggestion-title">{{ s.category || s.title || `建议 #${idx + 1}` }}</span>
             </div>
-            <div class="suggestion-body" v-html="renderMarkdown(s.content || s.description || '')"></div>
+            <div class="suggestion-body" v-html="renderMarkdown(s.content || s.suggestion || s.description || '')"></div>
           </div>
         </div>
       </div>
@@ -74,7 +81,7 @@
         <h3>🔗 关联分析</h3>
         <div class="correlation-list">
           <div v-for="(c, idx) in result.correlations" :key="idx" class="correlation-item">
-            <span class="corr-index">#{{ idx + 1 }}</span>
+            <span class="corr-type-badge" :class="c.type">{{ corrTypeLabel(c.type) }}</span>
             <div class="corr-body" v-html="renderMarkdown(c.description || c.content || (typeof c === 'string' ? c : JSON.stringify(c)))"></div>
           </div>
         </div>
@@ -86,15 +93,16 @@
         <div class="priority-list">
           <div v-for="(p, idx) in result.priorities" :key="idx" class="priority-item">
             <span class="priority-rank">{{ idx + 1 }}</span>
-            <span class="priority-badge" :class="p.level || 'medium'">{{ p.level || '中' }}</span>
-            <span class="priority-text">{{ p.issue || p.description || p.title }}</span>
+            <span class="priority-badge" :class="p.level || 'medium'">{{ priorityLabel(p.level) }}</span>
+            <span class="priority-issue">{{ p.issue || p.title }}</span>
+            <span class="priority-desc">{{ p.description }}</span>
           </div>
         </div>
       </div>
     </div>
 
     <!-- 无结果提示 -->
-    <div v-if="!result && !analyzing" class="empty-state">
+    <div v-if="!result && !analyzing && !errorMessage" class="empty-state">
       <div class="empty-icon">🔬</div>
       <p>暂无分析结果，请点击"触发分析"开始</p>
     </div>
@@ -115,6 +123,17 @@ export default {
     const analyzing = ref(false)
     const showConfirm = ref(false)
     const result = ref(null)
+    const errorMessage = ref('')
+
+    function priorityLabel(p) {
+      const map = { high: '高', medium: '中', low: '低', critical: '紧急' }
+      return map[p] || p || '中'
+    }
+
+    function corrTypeLabel(t) {
+      const map = { time_pattern: '时间模式', cross_category: '跨类别', anomaly: '异常' }
+      return map[t] || t || '关联'
+    }
 
     function renderMarkdown(text) {
       if (!text) return ''
@@ -139,6 +158,7 @@ export default {
     }
 
     function confirmRunAnalysis() {
+      errorMessage.value = ''
       if (getEffectivePeriod() === 'all') {
         showConfirm.value = true
       } else {
@@ -149,35 +169,22 @@ export default {
     async function runAnalysis() {
       showConfirm.value = false
       analyzing.value = true
+      errorMessage.value = ''
       const effectivePeriod = getEffectivePeriod()
       try {
-        await api.runAnalysis({ period: effectivePeriod })
-        // 轮询获取结果
-        let attempts = 0
-        const poll = async () => {
-          try {
-            const res = await api.getAnalysisResults({ period: effectivePeriod })
-            const data = res.data
-            if (data && (data.summary || data.content || data.suggestions)) {
-              result.value = data
-              analyzing.value = false
-            } else if (attempts < 30) {
-              attempts++
-              setTimeout(poll, 2000)
-            } else {
-              analyzing.value = false
-            }
-          } catch {
-            if (attempts < 30) {
-              attempts++
-              setTimeout(poll, 2000)
-            } else {
-              analyzing.value = false
-            }
-          }
+        const res = await api.runAnalysis({ period: effectivePeriod })
+        const data = res.data || {}
+        if (data.summary || data.suggestions?.length || data.correlations?.length || data.priorities?.length) {
+          result.value = data
+        } else {
+          result.value = null
         }
-        setTimeout(poll, 1500)
       } catch (e) {
+        console.error('分析失败', e)
+        result.value = null
+        const msg = e?.response?.data?.error || e?.response?.data?.message || e?.message || '未知错误'
+        errorMessage.value = `分析失败: ${msg}`
+      } finally {
         analyzing.value = false
       }
     }
@@ -185,8 +192,8 @@ export default {
     async function loadResults() {
       try {
         const res = await api.getAnalysisResults()
-        const data = res.data
-        if (data && (data.summary || data.content || data.suggestions)) {
+        const data = res.data || {}
+        if (data.summary || data.suggestions?.length || data.priorities?.length) {
           result.value = data
         }
       } catch { /* ignore */ }
@@ -197,8 +204,9 @@ export default {
     })
 
     return {
-      analysisPeriod, customValue, customUnit, analyzing, showConfirm, result,
-      renderMarkdown, confirmRunAnalysis, runAnalysis, onPeriodSelect
+      analysisPeriod, customValue, customUnit, analyzing, showConfirm, result, errorMessage,
+      renderMarkdown, confirmRunAnalysis, runAnalysis, onPeriodSelect,
+      priorityLabel, corrTypeLabel
     }
   }
 }
@@ -366,6 +374,43 @@ export default {
   to { transform: rotate(360deg); }
 }
 
+/* 错误提示 */
+.error-bar {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 14px 16px;
+  background: rgba(239, 68, 68, 0.1);
+  border: 1px solid rgba(239, 68, 68, 0.3);
+  border-radius: 8px;
+  color: var(--accent-red);
+  font-size: 14px;
+  line-height: 1.5;
+}
+
+.error-icon {
+  flex-shrink: 0;
+}
+
+.error-bar span:nth-child(2) {
+  flex: 1;
+}
+
+.error-dismiss {
+  flex-shrink: 0;
+  background: none;
+  border: none;
+  color: var(--accent-red);
+  cursor: pointer;
+  font-size: 16px;
+  padding: 0 4px;
+  opacity: 0.7;
+}
+
+.error-dismiss:hover {
+  opacity: 1;
+}
+
 /* 报告卡片 */
 .report-content {
   display: flex;
@@ -470,11 +515,27 @@ export default {
 .correlation-item {
   display: flex;
   gap: 10px;
+  align-items: flex-start;
   padding: 10px;
   background: var(--bg-secondary);
   border-radius: 6px;
   font-size: 13px;
 }
+
+.corr-type-badge {
+  display: inline-block;
+  padding: 2px 8px;
+  border-radius: 3px;
+  font-size: 11px;
+  font-weight: 600;
+  white-space: nowrap;
+  background: rgba(59,130,246,0.15);
+  color: var(--accent-blue);
+}
+
+.corr-type-badge.time_pattern { background: rgba(139,92,246,0.15); color: #8b5cf6; }
+.corr-type-badge.cross_category { background: rgba(245,158,11,0.15); color: #f59e0b; }
+.corr-type-badge.anomaly { background: rgba(239,68,68,0.15); color: #ef4444; }
 
 .corr-index {
   color: var(--accent-blue);
@@ -485,6 +546,7 @@ export default {
 .corr-body {
   color: var(--text-secondary);
   line-height: 1.6;
+  flex: 1;
 }
 
 /* 优先级 */
@@ -510,8 +572,15 @@ export default {
   min-width: 20px;
 }
 
-.priority-text {
+.priority-issue {
+  font-weight: 600;
   color: var(--text-primary);
+  min-width: 60px;
+}
+
+.priority-desc {
+  color: var(--text-secondary);
+  flex: 1;
 }
 
 /* 空状态 */
@@ -528,5 +597,73 @@ export default {
 
 .empty-state p {
   font-size: 14px;
+}
+
+/* ── 移动端适配 ────────────────────────────────────────── */
+@media (max-width: 768px) {
+  .action-bar {
+    flex-direction: column;
+    align-items: stretch;
+    gap: 10px;
+    padding: 12px;
+  }
+
+  .time-range {
+    flex-wrap: wrap;
+    gap: 6px;
+  }
+
+  .time-range label {
+    width: 100%;
+    font-size: 12px;
+  }
+
+  .time-range select {
+    flex: 1;
+    min-width: 0;
+    font-size: 14px;
+  }
+
+  .custom-range {
+    width: 100%;
+  }
+
+  .btn-primary {
+    width: 100%;
+    text-align: center;
+  }
+
+  .modal-card {
+    width: 95vw;
+    padding: 20px;
+  }
+
+  .report-card {
+    padding: 14px;
+  }
+
+  .report-card h3 {
+    font-size: 14px;
+  }
+
+  .suggestion-item {
+    padding: 10px;
+  }
+
+  .priority-item {
+    flex-wrap: wrap;
+    padding: 6px 10px;
+    font-size: 12px;
+  }
+
+  .priority-desc {
+    width: 100%;
+    margin-top: 4px;
+  }
+
+  .error-bar {
+    font-size: 13px;
+    padding: 10px 12px;
+  }
 }
 </style>

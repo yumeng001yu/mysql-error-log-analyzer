@@ -18,11 +18,6 @@
       </div>
     </div>
 
-    <div class="semantic-search-bar" v-if="semanticEnabled">
-      <input type="text" v-model="semanticQuery" placeholder="语义搜索日志..." class="semantic-input" @keydown.enter="doSemanticSearch" />
-      <button class="btn-semantic" @click="doSemanticSearch" :disabled="!semanticQuery">🔍</button>
-    </div>
-
     <!-- 统计卡片 -->
     <div class="stat-cards">
       <div class="stat-card">
@@ -55,29 +50,29 @@
       </div>
     </div>
 
-    <!-- 图表区域 -->
+    <!-- 分布信息 -->
     <div class="charts-row">
       <div class="chart-card">
         <h3>错误级别分布</h3>
-        <div ref="levelPieRef" class="chart-container"></div>
+        <div class="text-list" v-if="levelList.length > 0">
+          <div v-for="item in levelList" :key="item.level" class="text-list-row">
+            <span class="level-dot" :class="item.level.toLowerCase()">●</span>
+            <span class="text-list-label">{{ item.level }}</span>
+            <span class="text-list-value">{{ item.count }}</span>
+          </div>
+        </div>
+        <div v-else class="empty-text">暂无数据</div>
       </div>
       <div class="chart-card">
         <h3>错误类别分布</h3>
-        <div ref="categoryBarRef" class="chart-container"></div>
+        <div class="text-list" v-if="categoryList.length > 0">
+          <div v-for="item in categoryList" :key="item.category" class="text-list-row">
+            <span class="text-list-label">{{ item.category }}</span>
+            <span class="text-list-value">{{ item.count }}</span>
+          </div>
+        </div>
+        <div v-else class="empty-text">暂无数据</div>
       </div>
-    </div>
-
-    <div class="chart-card full-width">
-      <h3>错误趋势</h3>
-      <div class="trend-controls">
-        <button
-          v-for="g in trendGroups"
-          :key="g.value"
-          :class="['period-btn', { active: trendGroup === g.value }]"
-          @click="trendGroup = g.value; loadTrend()"
-        >{{ g.label }}</button>
-      </div>
-      <div ref="trendLineRef" class="chart-container" style="height: 280px;"></div>
     </div>
 
     <!-- 最近告警 -->
@@ -85,9 +80,9 @@
       <h3>最近告警</h3>
       <div class="alert-list" v-if="alerts.length > 0">
         <div v-for="alert in alerts.slice(0, 10)" :key="alert.id" class="alert-row">
-          <span class="alert-level-dot" :class="alert.level">●</span>
-          <span class="alert-instance">{{ alert.instance || '' }}</span>
-          <span class="alert-message">{{ alert.message || alert.content }}</span>
+          <span class="alert-level-dot" :class="alert.alert_type || alert.level">●</span>
+          <span class="alert-instance">实例 #{{ alert.instance_id || '' }}</span>
+          <span class="alert-message">{{ alert.llm_suggestion || alert.message || alert.alert_type || alert.content }}</span>
           <span class="alert-time">{{ formatTime(alert.created_at || alert.time) }}</span>
         </div>
       </div>
@@ -97,8 +92,7 @@
 </template>
 
 <script>
-import { ref, onMounted, onUnmounted, nextTick } from 'vue'
-import * as echarts from 'echarts'
+import { ref, onMounted } from 'vue'
 import { api } from '../api.js'
 
 export default {
@@ -107,27 +101,16 @@ export default {
     const period = ref('7d')
     const customValue = ref(null)
     const customUnit = ref('h')
-    const trendGroup = ref('hour')
     const stats = ref({})
     const alerts = ref([])
-
-    const levelPieRef = ref(null)
-    const categoryBarRef = ref(null)
-    const trendLineRef = ref(null)
-    let levelPieChart = null
-    let categoryBarChart = null
-    let trendLineChart = null
+    const levelList = ref([])
+    const categoryList = ref([])
 
     const periods = [
       { label: '全部', value: 'all' },
       { label: '7天', value: '7d' },
       { label: '24小时', value: '24h' },
       { label: '1小时', value: '1h' }
-    ]
-
-    const trendGroups = [
-      { label: '按小时', value: 'hour' },
-      { label: '按天', value: 'day' }
     ]
 
     function formatTime(t) {
@@ -143,8 +126,18 @@ export default {
     async function loadStats() {
       try {
         const res = await api.getLogStats({ period: getPeriodParam() })
-        stats.value = res.data || {}
-      } catch (e) { /* ignore */ }
+        const data = res.data || {}
+        stats.value = data
+
+        // 从 stats 中提取级别分布
+        const levels = data.levels || []
+        if (Array.isArray(levels) && levels.length > 0) {
+          levelList.value = levels.map(l => ({
+            level: l.level || l.name,
+            count: l.count || l.value || 0
+          }))
+        }
+      } catch (e) { console.error('loadStats error', e) }
     }
 
     async function loadDistribution() {
@@ -152,114 +145,52 @@ export default {
         const res = await api.getLogDistribution({ period: getPeriodParam() })
         const data = res.data || {}
 
-        // 级别饼图
-        const levels = data.levels || data.by_level || []
-        if (levelPieChart) {
-          levelPieChart.setOption({
-            tooltip: { trigger: 'item', formatter: '{b}: {c} ({d}%)' },
-            color: ['#ef4444', '#f59e0b', '#06b6d4', '#64748b'],
-            series: [{
-              type: 'pie',
-              radius: ['40%', '70%'],
-              center: ['50%', '55%'],
-              label: { color: '#94a3b8', fontSize: 12 },
-              data: Array.isArray(levels)
-                ? levels.map(l => ({ name: l.level || l.name, value: l.count || l.value }))
-                : Object.entries(levels).map(([name, value]) => ({ name, value }))
-            }]
-          })
+        // 级别分布
+        const levels = data.by_level || data.levels || []
+        if (Array.isArray(levels) && levels.length > 0) {
+          levelList.value = levels.map(l => ({
+            level: l.level || l.name,
+            count: l.count || l.value || 0
+          }))
+        } else if (typeof levels === 'object') {
+          levelList.value = Object.entries(levels).map(([name, value]) => ({
+            level: name,
+            count: value
+          }))
         }
 
-        // 类别柱状图
-        const categories = data.categories || data.by_category || []
-        if (categoryBarChart) {
-          const catData = Array.isArray(categories) ? categories : Object.entries(categories).map(([name, value]) => ({ name, value }))
-          catData.sort((a, b) => (b.count || b.value) - (a.count || a.value))
-          const top10 = catData.slice(0, 10)
-          categoryBarChart.setOption({
-            tooltip: { trigger: 'axis' },
-            grid: { left: 100, right: 20, top: 10, bottom: 30 },
-            xAxis: { type: 'value', axisLabel: { color: '#64748b' }, splitLine: { lineStyle: { color: '#1e293b' } } },
-            yAxis: {
-              type: 'category',
-              data: top10.map(c => c.name || c.category).reverse(),
-              axisLabel: { color: '#94a3b8', fontSize: 12 }
-            },
-            series: [{
-              type: 'bar',
-              data: top10.map(c => c.count || c.value).reverse(),
-              itemStyle: { color: '#3b82f6', borderRadius: [0, 4, 4, 0] }
-            }]
-          })
+        // 类别分布
+        const categories = data.by_category || data.categories || []
+        if (Array.isArray(categories) && categories.length > 0) {
+          const catData = categories.map(c => ({
+            category: c.category || c.name,
+            count: c.count || c.value || 0
+          }))
+          catData.sort((a, b) => b.count - a.count)
+          categoryList.value = catData.slice(0, 15)
+        } else if (typeof categories === 'object') {
+          const catData = Object.entries(categories).map(([name, value]) => ({
+            category: name,
+            count: value
+          }))
+          catData.sort((a, b) => b.count - a.count)
+          categoryList.value = catData.slice(0, 15)
         }
-      } catch (e) { /* ignore */ }
-    }
-
-    async function loadTrend() {
-      try {
-        const res = await api.getLogTrend({ period: getPeriodParam(), group_by: trendGroup.value })
-        const data = res.data || []
-        const items = Array.isArray(data) ? data : (data.trend || [])
-
-        if (trendLineChart) {
-          trendLineChart.setOption({
-            tooltip: { trigger: 'axis' },
-            grid: { left: 50, right: 20, top: 20, bottom: 30 },
-            xAxis: {
-              type: 'category',
-              data: items.map(i => i.time || i.date || i.hour),
-              axisLabel: { color: '#64748b', fontSize: 11 },
-              boundaryGap: false
-            },
-            yAxis: {
-              type: 'value',
-              axisLabel: { color: '#64748b' },
-              splitLine: { lineStyle: { color: '#1e293b' } }
-            },
-            series: [{
-              type: 'line',
-              data: items.map(i => i.count || i.value),
-              smooth: true,
-              areaStyle: { color: new echarts.graphic.LinearGradient(0, 0, 0, 1, [
-                { offset: 0, color: 'rgba(59,130,246,0.3)' },
-                { offset: 1, color: 'rgba(59,130,246,0.02)' }
-              ])},
-              lineStyle: { color: '#3b82f6', width: 2 },
-              itemStyle: { color: '#3b82f6' }
-            }]
-          })
-        }
-      } catch (e) { /* ignore */ }
+      } catch (e) { console.error('loadDistribution error', e) }
     }
 
     async function loadAlerts() {
       try {
         const res = await api.getAlerts({ limit: 10 })
-        alerts.value = res.data?.alerts || res.data || []
-      } catch (e) { /* ignore */ }
-    }
-
-    const semanticEnabled = ref(true)
-    const semanticQuery = ref('')
-
-    async function doSemanticSearch() {
-      if (!semanticQuery.value) return
-      try {
-        const res = await api.semanticSearch({ query: semanticQuery.value, k: 10 })
         const data = res.data || {}
-        if (data.message && !data.items?.length) {
-          semanticEnabled.value = false
-        }
-      } catch (e) {
-        semanticEnabled.value = false
-      }
+        alerts.value = data.items || data.alerts || data || []
+      } catch (e) { console.error('loadAlerts error', e) }
     }
 
     function changePeriod(p) {
       period.value = p
       loadStats()
       loadDistribution()
-      loadTrend()
     }
 
     function applyCustomPeriod() {
@@ -267,49 +198,19 @@ export default {
         period.value = `${customValue.value}${customUnit.value}`
         loadStats()
         loadDistribution()
-        loadTrend()
       }
     }
 
-    function handleResize() {
-      levelPieChart?.resize()
-      categoryBarChart?.resize()
-      trendLineChart?.resize()
-    }
-
-    onMounted(async () => {
-      await nextTick()
-      levelPieChart = echarts.init(levelPieRef.value, 'dark')
-      categoryBarChart = echarts.init(categoryBarRef.value, 'dark')
-      trendLineChart = echarts.init(trendLineRef.value, 'dark')
-
-      // 设置暗色背景透明
-      const darkBg = { backgroundColor: 'transparent' }
-      levelPieChart.setOption(darkBg)
-      categoryBarChart.setOption(darkBg)
-      trendLineChart.setOption(darkBg)
-
+    onMounted(() => {
       loadStats()
       loadDistribution()
-      loadTrend()
       loadAlerts()
-
-      window.addEventListener('resize', handleResize)
-    })
-
-    onUnmounted(() => {
-      window.removeEventListener('resize', handleResize)
-      levelPieChart?.dispose()
-      categoryBarChart?.dispose()
-      trendLineChart?.dispose()
     })
 
     return {
-      period, customValue, customUnit, trendGroup, stats, alerts,
-      periods, trendGroups,
-      levelPieRef, categoryBarRef, trendLineRef,
-      semanticEnabled, semanticQuery, doSemanticSearch,
-      formatTime, changePeriod, applyCustomPeriod, loadTrend
+      period, customValue, customUnit, stats, alerts,
+      periods, levelList, categoryList,
+      formatTime, changePeriod, applyCustomPeriod
     }
   }
 }
@@ -385,43 +286,6 @@ export default {
   border-color: var(--accent-blue);
 }
 
-.semantic-search-bar {
-  display: flex;
-  gap: 8px;
-  align-items: center;
-}
-
-.semantic-input {
-  flex: 1;
-  max-width: 300px;
-  padding: 6px 12px;
-  background: var(--bg-secondary);
-  border: 1px solid var(--border-color);
-  border-radius: 4px;
-  color: var(--text-primary);
-  font-size: 13px;
-  outline: none;
-}
-
-.semantic-input:focus {
-  border-color: var(--accent-purple, #8b5cf6);
-}
-
-.btn-semantic {
-  padding: 6px 12px;
-  background: var(--accent-purple, #8b5cf6);
-  color: #fff;
-  border: none;
-  border-radius: 4px;
-  cursor: pointer;
-  font-size: 13px;
-}
-
-.btn-semantic:disabled {
-  opacity: 0.4;
-  cursor: not-allowed;
-}
-
 .stat-cards {
   display: grid;
   grid-template-columns: repeat(4, 1fr);
@@ -478,15 +342,47 @@ export default {
   width: 100%;
 }
 
-.chart-container {
-  height: 240px;
-  width: 100%;
+.text-list {
+  display: flex;
+  flex-direction: column;
 }
 
-.trend-controls {
+.text-list-row {
   display: flex;
-  gap: 6px;
-  margin-bottom: 8px;
+  align-items: center;
+  gap: 10px;
+  padding: 8px 0;
+  border-bottom: 1px solid var(--border-color);
+  font-size: 13px;
+}
+
+.text-list-row:last-child {
+  border-bottom: none;
+}
+
+.level-dot {
+  font-size: 10px;
+}
+
+.level-dot.error { color: var(--accent-red); }
+.level-dot.warning { color: var(--accent-yellow); }
+.level-dot.info { color: var(--accent-cyan); }
+.level-dot.critical { color: var(--accent-red); }
+
+.text-list-label {
+  flex: 1;
+  color: var(--text-primary);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.text-list-value {
+  color: var(--accent-blue);
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+  min-width: 40px;
+  text-align: right;
 }
 
 .alert-list {
@@ -514,6 +410,7 @@ export default {
 .alert-level-dot.error { color: var(--accent-red); }
 .alert-level-dot.warning { color: var(--accent-yellow); }
 .alert-level-dot.info { color: var(--accent-cyan); }
+.alert-level-dot.critical { color: var(--accent-red); }
 
 .alert-instance {
   color: var(--accent-cyan);
@@ -546,6 +443,93 @@ export default {
   }
   .charts-row {
     grid-template-columns: 1fr;
+  }
+}
+
+@media (max-width: 768px) {
+  .period-selector {
+    flex-wrap: wrap;
+    gap: 6px;
+  }
+
+  .period-btn {
+    padding: 5px 10px;
+    font-size: 12px;
+  }
+
+  .custom-period {
+    margin-left: 0;
+    padding-left: 0;
+    border-left: none;
+    width: 100%;
+    margin-top: 4px;
+  }
+
+  .custom-input {
+    width: 50px;
+    font-size: 12px;
+    padding: 4px 6px;
+  }
+
+  .custom-select {
+    font-size: 12px;
+    padding: 4px 6px;
+  }
+
+  .stat-cards {
+    grid-template-columns: repeat(2, 1fr);
+    gap: 10px;
+  }
+
+  .stat-card {
+    padding: 12px;
+    gap: 10px;
+  }
+
+  .stat-icon {
+    font-size: 22px;
+  }
+
+  .stat-value {
+    font-size: 22px;
+  }
+
+  .stat-label {
+    font-size: 11px;
+  }
+
+  .charts-row {
+    grid-template-columns: 1fr;
+  }
+
+  .chart-card {
+    padding: 12px;
+  }
+
+  .chart-card h3 {
+    font-size: 13px;
+    margin-bottom: 8px;
+  }
+
+  .text-list-row {
+    gap: 6px;
+    padding: 6px 0;
+    font-size: 12px;
+  }
+
+  .alert-row {
+    gap: 6px;
+    padding: 6px 0;
+    font-size: 12px;
+  }
+
+  .alert-instance {
+    min-width: 60px;
+    font-size: 11px;
+  }
+
+  .alert-message {
+    font-size: 12px;
   }
 }
 </style>

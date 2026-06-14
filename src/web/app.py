@@ -5,7 +5,9 @@ from pathlib import Path
 
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.staticfiles import StaticFiles
+from starlette.requests import Request
+from starlette.responses import FileResponse, JSONResponse
+from starlette.staticfiles import StaticFiles
 
 from src.config import Config
 from src.storage.database import DatabaseManager
@@ -17,6 +19,83 @@ logger = logging.getLogger(__name__)
 _db: DatabaseManager | None = None
 _watcher = None
 
+# 前端构建产物路径
+_FRONTEND_DIST = Path(__file__).parent.parent.parent / "frontend" / "dist"
+
+
+class SPAFallbackMiddleware:
+    """原始 ASGI 中间件：拦截非 API 路径的 404 响应，返回 index.html
+
+    BaseHTTPMiddleware 无法可靠拦截 404（Starlette 的已知问题），
+    因此使用原始 ASGI 协议层中间件，直接缓冲响应判断状态码。
+    """
+
+    def __init__(self, app):
+        self.app = app
+
+    async def __call__(self, scope, receive, send):
+        if scope["type"] != "http":
+            await self.app(scope, receive, send)
+            return
+
+        path = scope.get("path", "/")
+
+        # API / 文档 / 静态资源路径直接透传，不做拦截
+        if any(path.startswith(p) for p in ("/api", "/assets", "/docs", "/openapi", "/redoc")):
+            await self.app(scope, receive, send)
+            return
+
+        # 对其余路径（SPA 路由），缓冲响应以判断是否 404
+        status_code = None
+        headers = None
+        body_parts = []
+
+        async def send_wrapper(message):
+            nonlocal status_code, headers, body_parts
+
+            if message["type"] == "http.response.start":
+                status_code = message["status"]
+                headers = message.get("headers", [])
+                # 暂不发送，等 body 完成后决定是否替换
+
+            elif message["type"] == "http.response.body":
+                body_parts.append(message.get("body", b""))
+                more_body = message.get("more_body", False)
+
+                if not more_body:
+                    # 完整响应已接收
+                    if status_code == 404:
+                        index_path = _FRONTEND_DIST / "index.html"
+                        if index_path.exists():
+                            content = index_path.read_bytes()
+                            await send({
+                                "type": "http.response.start",
+                                "status": 200,
+                                "headers": [
+                                    [b"content-type", b"text/html; charset=utf-8"],
+                                    [b"content-length", str(len(content)).encode()],
+                                ],
+                            })
+                            await send({
+                                "type": "http.response.body",
+                                "body": content,
+                            })
+                            return
+
+                    # 非 404 或 index.html 不存在，转发原始响应
+                    await send({
+                        "type": "http.response.start",
+                        "status": status_code,
+                        "headers": headers,
+                    })
+                    for part in body_parts:
+                        await send({
+                            "type": "http.response.body",
+                            "body": part,
+                        })
+
+        await self.app(scope, receive, send_wrapper)
+
 
 def create_app() -> FastAPI:
     """创建 FastAPI 应用实例"""
@@ -26,7 +105,12 @@ def create_app() -> FastAPI:
         version="1.0.0",
     )
 
-    # ── CORS 配置（开发模式允许所有来源）────────────────────
+    # ── 健康检查 ────────────────────────────────────────────
+    @app.get("/api/health")
+    async def health_check():
+        return {"status": "ok", "service": "mysql-error-log-analyzer"}
+
+    # ── CORS 配置 ────────────────────────────────────────────
     app.add_middleware(
         CORSMiddleware,
         allow_origins=["*"],
@@ -35,17 +119,40 @@ def create_app() -> FastAPI:
         allow_headers=["*"],
     )
 
+    # ── SPA fallback 中间件（原始 ASGI，必须在 CORS 之后）────
+    app.add_middleware(SPAFallbackMiddleware)
+
     # ── 注册 API 路由 ─────────────────────────────────────
     from src.web.api.auth import router as auth_router
     from src.web.api.logs import router as logs_router
     from src.web.api.analysis import router as analysis_router
     from src.web.api.status import router as status_router
+    from src.web.api.settings import router as settings_router
+    from src.web.api.slow_query import router as slow_query_router
+    from src.web.api.monitor import router as monitor_router
+    from src.web.api.alerts import router as alerts_router
+    from src.web.api.patterns import router as patterns_router
+    from src.web.api.search import router as search_router
+    from src.web.api.instances import router as instances_router
+    from src.web.api.baseline import router as baseline_router
+    from src.web.api.reports import router as reports_router
+    from src.web.api.deadlock import router as deadlock_router
     from src.web.websocket import router as ws_router
 
     app.include_router(auth_router)
     app.include_router(logs_router)
     app.include_router(analysis_router)
     app.include_router(status_router)
+    app.include_router(settings_router)
+    app.include_router(slow_query_router)
+    app.include_router(monitor_router)
+    app.include_router(alerts_router)
+    app.include_router(patterns_router)
+    app.include_router(search_router)
+    app.include_router(instances_router)
+    app.include_router(baseline_router)
+    app.include_router(reports_router)
+    app.include_router(deadlock_router)
     app.include_router(ws_router)
 
     # ── 启动事件 ─────────────────────────────────────────
@@ -175,9 +282,14 @@ def create_app() -> FastAPI:
         StatusTracker().stop()
         logger.info("应用已关闭")
 
-    # ── 挂载静态文件（前端构建产物）────────────────────────
-    frontend_dist = Path(__file__).parent.parent.parent / "frontend" / "dist"
-    if frontend_dist.is_dir():
-        app.mount("/", StaticFiles(directory=str(frontend_dist), html=True), name="static")
+    # ── 静态文件 ────────────────────────────────────────────
+    if _FRONTEND_DIST.is_dir():
+        assets_dir = _FRONTEND_DIST / "assets"
+        if assets_dir.is_dir():
+            app.mount("/assets", StaticFiles(directory=str(assets_dir)), name="static-assets")
 
     return app
+
+
+# 模块级 app 实例，供 uvicorn 直接引用
+app = create_app()

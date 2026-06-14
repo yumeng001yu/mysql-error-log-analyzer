@@ -27,13 +27,14 @@ http.interceptors.request.use(config => {
   return config
 })
 
-// 响应拦截器：401 时清除 token
+// 响应拦截器：401 时清除 token（不自动 reload，避免循环）
 http.interceptors.response.use(
   res => res,
   err => {
     if (err.response && err.response.status === 401) {
       removeToken()
-      window.location.reload()
+      // 不再自动 reload，而是派发自定义事件让 App.vue 处理
+      window.dispatchEvent(new CustomEvent('auth-expired'))
     }
     return Promise.reject(err)
   }
@@ -59,6 +60,10 @@ export const api = {
   semanticSearch(params) {
     return http.get('/logs/semantic', { params })
   },
+  // 语义相似度关联（知识图谱用）
+  getSemanticSimilar(params) {
+    return http.get('/logs/semantic/similar', { params })
+  },
 
   // 分析
   runAnalysis(data) {
@@ -79,8 +84,32 @@ export const api = {
   },
 
   // 实例
-  getInstances() {
-    return http.get('/instances')
+  getInstances(params) {
+    return http.get('/instances/', { params })
+  },
+  addInstance(data) {
+    return http.post('/instances/', data)
+  },
+  updateInstance(id, data) {
+    return http.put(`/instances/${id}`, data)
+  },
+  deleteInstance(id) {
+    return http.delete(`/instances/${id}`)
+  },
+  testInstanceConnection(id) {
+    return http.post(`/instances/${id}/test`)
+  },
+  getInstanceStatus(id) {
+    return http.get(`/instances/${id}/status`)
+  },
+  getInstanceGroups() {
+    return http.get('/instances/groups')
+  },
+  getInstancesOverview() {
+    return http.get('/instances/overview')
+  },
+  collectInstanceLogs(id) {
+    return http.post(`/instances/${id}/collect`)
   },
 
   // 告警
@@ -94,7 +123,85 @@ export const api = {
   // 登录
   login(data) {
     return http.post('/auth/login', data)
-  }
+  },
+
+  // 设置
+  getSettings() {
+    return http.get('/settings')
+  },
+  saveSettings(data) {
+    return http.put('/settings', data)
+  },
+  testLLM(data) {
+    return http.post('/settings/test-llm', data)
+  },
+  testEmbedding(data) {
+    return http.post('/settings/test-embedding', data)
+  },
+
+  // 慢查询
+  getSlowQueryStats(params) { return http.get('/slow-query/stats', { params }) },
+  getSlowQueryList(params) { return http.get('/slow-query/list', { params }) },
+  getSlowQueryDistribution(params) { return http.get('/slow-query/distribution', { params }) },
+  analyzeSlowQuery(data) { return http.post('/slow-query/analyze', data) },
+  parseSlowQuery(data) { return http.post('/slow-query/parse', data) },
+
+  // 监控
+  getMonitorStatus(params) { return http.get('/monitor/status', { params }) },
+  getProcesslist(params) { return http.get('/monitor/processlist', { params }) },
+  getInnodbStatus(params) { return http.get('/monitor/innodb', { params }) },
+  getMonitorHistory(params) { return http.get('/monitor/history', { params }) },
+  getReplicationStatus(params) { return http.get('/monitor/replication', { params }) },
+  testMySQLConnection(data) { return http.post('/monitor/test-connection', data) },
+
+  // 告警引擎
+  getAlertRules() { return http.get('/alerts/rules') },
+  createAlertRule(data) { return http.post('/alerts/rules', data) },
+  updateAlertRule(id, data) { return http.put(`/alerts/rules/${id}`, data) },
+  deleteAlertRule(id) { return http.delete(`/alerts/rules/${id}`) },
+  toggleAlertRule(id) { return http.post(`/alerts/rules/${id}/toggle`) },
+  getAlertHistory(params) { return http.get('/alerts/history', { params }) },
+  acknowledgeAlert(id) { return http.put(`/alerts/history/${id}/acknowledge`) },
+  getNotificationChannels() { return http.get('/alerts/channels') },
+  createNotificationChannel(data) { return http.post('/alerts/channels', data) },
+  updateNotificationChannel(id, data) { return http.put(`/alerts/channels/${id}`, data) },
+  deleteNotificationChannel(id) { return http.delete(`/alerts/channels/${id}`) },
+  testNotificationChannel(id) { return http.post(`/alerts/channels/${id}/test`) },
+  getAlertStats() { return http.get('/alerts/stats') },
+  checkAlerts() { return http.post('/alerts/check') },
+
+  // 模式识别
+  recognizePatterns(params) { return http.get('/patterns/recognize', { params }) },
+  getPatternAnomalies(params) { return http.get('/patterns/anomalies', { params }) },
+  getPatternStats(params) { return http.get('/patterns/stats', { params }) },
+  getPatternTrend(patternId, params) { return http.get(`/patterns/${patternId}/trend`, { params }) },
+
+  // 全文本搜索
+  searchLogs(params) { return http.get('/search/', { params }) },
+  searchSuggest(params) { return http.get('/search/suggest', { params }) },
+  getLogContext(id, params) { return http.get(`/search/context/${id}`, { params }) },
+  getSearchFields() { return http.get('/search/fields') },
+
+  // 性能基线与异常检测
+  buildBaselines(params) { return http.post('/baseline/build', null, { params }) },
+  getAnomalies(params) { return http.get('/baseline/anomalies', { params }) },
+  getBaselines(params) { return http.get('/baseline/list', { params }) },
+  getMetricForecast(metricName, params) { return http.get(`/baseline/forecast/${metricName}`, { params }) },
+  getBaselineOverview() { return http.get('/baseline/overview') },
+
+  // 死锁分析
+  getDeadlockList(params) { return http.get('/deadlock/list', { params }) },
+  getDeadlockDetail(id) { return http.get(`/deadlock/${id}`) },
+  getDeadlockStats() { return http.get('/deadlock/stats') },
+  analyzeDeadlock(params) { return http.post('/deadlock/analyze', null, { params }) },
+  getDeadlockLockChain(id) { return http.get(`/deadlock/lock-chain/${id}`) },
+
+  // 运维报表
+  generateReport(params) { return http.post('/reports/generate', null, { params }) },
+  getReportList(params) { return http.get('/reports/list', { params }) },
+  getReport(id) { return http.get(`/reports/${id}`) },
+  deleteReport(id) { return http.delete(`/reports/${id}`) },
+  getLatestReport(type, params) { return http.get(`/reports/latest/${type}`, { params }) }
 }
 
 // ========== WebSocket 管理 ==========

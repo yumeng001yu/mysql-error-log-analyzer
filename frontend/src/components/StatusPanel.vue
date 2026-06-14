@@ -428,4 +428,69 @@ export default {
     grid-template-columns: repeat(2, 1fr);
   }
 }
+
+@media (max-width: 768px) {
+  .overview-grid {
+    grid-template-columns: repeat(2, 1fr);
+    gap: 10px;
+  }
+
+  .overview-value {
+    font-size: 15px;
+  }
+
+  .instance-grid {
+    grid-template-columns: 1fr;
+  }
+
+  /* 告警表格改为卡片列表 */
+  .alert-table-wrapper {
+    overflow-x: visible;
+  }
+
+  .alert-table thead {
+    display: none;
+  }
+
+  .alert-table,
+  .alert-table tbody,
+  .alert-table tr,
+  .alert-table td {
+    display: block;
+    width: 100%;
+  }
+
+  .alert-table tr {
+    background: var(--bg-card);
+    border: 1px solid var(--border-color);
+    border-radius: 8px;
+    margin-bottom: 8px;
+    padding: 10px 12px;
+  }
+
+  .alert-table tr.unread {
+    background: rgba(59, 130, 246, 0.08);
+  }
+
+  .alert-table td {
+    border: none;
+    padding: 2px 0;
+    font-size: 13px;
+  }
+
+  .alert-msg-cell {
+    max-width: 100%;
+    white-space: normal;
+    word-break: break-word;
+  }
+
+  .time-cell {
+    color: var(--text-muted);
+    font-size: 12px;
+  }
+
+  .mark-read-btn {
+    margin-top: 4px;
+  }
+}
 </style>

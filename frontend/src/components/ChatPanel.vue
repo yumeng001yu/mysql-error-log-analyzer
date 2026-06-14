@@ -335,4 +335,56 @@ export default {
   opacity: 0.4;
   cursor: not-allowed;
 }
+
+/* ── 移动端适配 ────────────────────────────────────────── */
+@media (max-width: 768px) {
+  .chat-panel {
+    height: calc(100vh - 100px);
+  }
+
+  .quick-actions {
+    padding: 8px 10px;
+    gap: 6px;
+  }
+
+  .quick-btn {
+    padding: 4px 8px;
+    font-size: 11px;
+  }
+
+  .message-list {
+    padding: 10px;
+    gap: 10px;
+  }
+
+  .message {
+    max-width: 90%;
+  }
+
+  .msg-avatar {
+    font-size: 18px;
+    width: 28px;
+    height: 28px;
+  }
+
+  .msg-content {
+    padding: 8px 10px;
+    font-size: 13px;
+  }
+
+  .input-area {
+    padding: 8px 10px;
+    gap: 8px;
+  }
+
+  .input-area textarea {
+    font-size: 16px; /* 防止 iOS 自动缩放 */
+    min-height: 36px;
+  }
+
+  .send-btn {
+    padding: 8px 14px;
+    font-size: 13px;
+  }
+}
 </style>

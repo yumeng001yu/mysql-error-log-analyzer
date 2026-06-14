@@ -495,4 +495,111 @@ export default {
   padding: 40px;
   font-size: 14px;
 }
+
+/* ── 移动端适配 ────────────────────────────────────────── */
+@media (max-width: 768px) {
+  .filter-bar {
+    padding: 12px;
+    gap: 8px;
+  }
+
+  .filter-group {
+    width: 100%;
+  }
+
+  .filter-group select,
+  .filter-group input {
+    width: 100%;
+    font-size: 14px;
+    padding: 8px 10px;
+  }
+
+  .btn-primary,
+  .btn-semantic,
+  .btn-secondary {
+    width: 100%;
+    padding: 10px;
+    font-size: 14px;
+  }
+
+  /* 移动端：隐藏表格，显示卡片列表 */
+  .log-table thead {
+    display: none;
+  }
+
+  .log-table,
+  .log-table tbody,
+  .log-table tr,
+  .log-table td {
+    display: block;
+    width: 100%;
+  }
+
+  .log-row {
+    background: var(--bg-card);
+    border: 1px solid var(--border-color);
+    border-radius: 8px;
+    margin-bottom: 8px;
+    padding: 10px 12px;
+    display: flex;
+    flex-wrap: wrap;
+    gap: 6px;
+    align-items: center;
+  }
+
+  .log-row td {
+    border: none;
+    padding: 0;
+    font-size: 13px;
+  }
+
+  .col-time {
+    width: auto;
+    color: var(--text-muted);
+    font-size: 12px;
+  }
+
+  .col-instance {
+    width: auto;
+    color: var(--accent-cyan);
+    font-size: 12px;
+  }
+
+  .col-level {
+    width: auto;
+  }
+
+  .col-msg {
+    width: 100%;
+    margin-top: 4px;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  .detail-row td {
+    background: none;
+    padding: 0;
+  }
+
+  .log-detail {
+    padding: 8px 0 0;
+  }
+
+  .pagination {
+    flex-wrap: wrap;
+    gap: 6px;
+    justify-content: center;
+  }
+
+  .page-info {
+    width: 100%;
+    text-align: center;
+  }
+
+  .pagination button {
+    padding: 6px 10px;
+    font-size: 12px;
+  }
+}
 </style>
