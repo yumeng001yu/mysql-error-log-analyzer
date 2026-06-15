@@ -201,7 +201,35 @@ export const api = {
   getReportList(params) { return http.get('/reports/list', { params }) },
   getReport(id) { return http.get(`/reports/${id}`) },
   deleteReport(id) { return http.delete(`/reports/${id}`) },
-  getLatestReport(type, params) { return http.get(`/reports/latest/${type}`, { params }) }
+  getLatestReport(type, params) { return http.get(`/reports/latest/${type}`, { params }) },
+
+  // ========== Redis 监控 ==========
+  getRedisStatus(params) { return http.get('/redis/status', { params }) },
+  getRedisClients(params) { return http.get('/redis/clients', { params }) },
+  getRedisReplication(params) { return http.get('/redis/replication', { params }) },
+  getRedisPersistence(params) { return http.get('/redis/persistence', { params }) },
+  getRedisConfig(params) { return http.get('/redis/config', { params }) },
+  getRedisLatency(params) { return http.get('/redis/latency', { params }) },
+  testRedisConnection(params) { return http.post('/redis/test-connection', null, { params }) },
+
+  // ========== Redis 慢查询 ==========
+  getRedisSlowlog(params) { return http.get('/redis/slowlog/', { params }) },
+  getRedisSlowlogStats(params) { return http.get('/redis/slowlog/stats', { params }) },
+  getRedisSlowlogConfig(params) { return http.get('/redis/slowlog/config', { params }) },
+
+  // ========== Redis 分析 ==========
+  getRedisMemory(params) { return http.get('/redis/memory', { params }) },
+  scanRedisKeys(params) { return http.post('/redis/keys/scan', null, { params }) },
+  getRedisTopKeys(params) { return http.get('/redis/keys/top', { params }) },
+  getRedisKeyspace(params) { return http.get('/redis/keyspace', { params }) },
+  getRedisKeyDetail(key, params) { return http.get(`/redis/key/${key}`, { params }) },
+  getRedisPersistenceDetail(params) { return http.get('/redis/persistence/detail', { params }) },
+
+  // ========== Redis 集群/哨兵 ==========
+  getRedisClusterInfo(params) { return http.get('/redis/cluster/info', { params }) },
+  getRedisClusterNodes(params) { return http.get('/redis/cluster/nodes', { params }) },
+  getRedisSentinelMasters(params) { return http.get('/redis/sentinel/masters', { params }) },
+  getRedisSentinelSlaves(params) { return http.get('/redis/sentinel/slaves', { params }) },
 }
 
 // ========== WebSocket 管理 ==========

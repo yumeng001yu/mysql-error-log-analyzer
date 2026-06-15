@@ -1,11 +1,12 @@
 <p align="center">
-  <h1 align="center">MySQL Error Log Analyzer</h1>
-  <p align="center">MySQL 错误日志自动分析平台</p>
+  <h1 align="center">DB Ops Analyzer</h1>
+  <p align="center">数据库运维自动分析平台 — MySQL + Redis</p>
   <p align="center">
     <img src="https://img.shields.io/badge/Python-3.10+-blue" alt="Python">
     <img src="https://img.shields.io/badge/FastAPI-0.104+-teal" alt="FastAPI">
     <img src="https://img.shields.io/badge/Vue3-3.x-brightgreen" alt="Vue3">
     <img src="https://img.shields.io/badge/MySQL-8.0+-orange" alt="MySQL">
+    <img src="https://img.shields.io/badge/Redis-6.0+-red" alt="Redis">
     <img src="https://img.shields.io/badge/License-MIT-yellow" alt="License">
   </p>
 </p>
@@ -14,11 +15,11 @@
 
 ## 项目简介
 
-**MySQL Error Log Analyzer** 是一个功能完整的 MySQL 错误日志自动分析平台。放入任何有 MySQL 的环境中，它能主动找到错误日志并进行分析，提供 CLI 对话和 Web 可视化两种交互方式。已在真实 MySQL 8.0 环境下通过端到端验证（45/45 测试全部通过）。
+**DB Ops Analyzer** 是一个功能完整的数据库运维自动分析平台，支持 **MySQL** 和 **Redis** 两种数据库。放入任何有 MySQL/Redis 的环境中，它能主动发现实例并进行深度分析，提供 CLI 对话和 Web 可视化两种交互方式。已在真实 MySQL 8.0 和 Redis 7.0 环境下通过端到端验证。
 
 ### 核心特性
 
-- 🔍 **自动发现** — 自动检测本机 MySQL 实例及错误日志路径，支持多实例同时监控
+- 🔍 **自动发现** — 自动检测本机 MySQL/Redis 实例，支持多实例同时监控
 - 🤖 **AI 分析** — 基于 LangGraph 多节点工作流，支持 OpenAI / Ollama / 自定义端点
 - 💬 **智能对话** — CLI 自然语言对话，RAG 增强检索相关日志上下文
 - 📊 **可视化** — Web 界面提供 SVG 力导向知识图谱、仪表盘、监控面板等多种可视化
@@ -26,10 +27,14 @@
 - 🚨 **智能告警** — 规则引擎 + 5 种通知渠道（Webhook/Email/钉钉/飞书/Slack）
 - 🔗 **死锁分析** — InnoDB 死锁日志解析、锁等待链有向图、DFS 环检测、根因分析
 - 📈 **性能基线** — 自动构建 hourly/daily/weekly 基线，标准差偏离异常检测
-- 🏢 **多实例管理** — 实例 CRUD、连接测试、分组管理、统一概览
+- 🏢 **多实例管理** — 实例 CRUD、连接测试、分组管理、统一概览（MySQL + Redis）
 - 📋 **运维报表** — 日报/周报/月报自动生成，健康评分算法
 - 🔍 **模式识别** — 日志模板聚类、异常检测（突增/新模式/递增趋势）
-- ⏱️ **实时监控** — QPS/TPS/连接数/Buffer Pool 命中率/InnoDB 状态/复制状态
+- ⏱️ **实时监控** — MySQL: QPS/TPS/连接数/Buffer Pool；Redis: QPS/内存/命中率/淘汰
+- 💾 **Redis 内存分析** — 碎片率、淘汰策略、内存组成、峰值追踪
+- 🔑 **Redis Key 分析** — 大 Key 扫描、Key 空间分布、过期分析（手动触发）
+- 💿 **Redis 持久化** — RDB/AOF 状态监控、fork 耗时、重写进度
+- 🌐 **Redis 集群/哨兵** — Cluster 节点状态、槽分配、Sentinel 主从监控
 - 🔒 **安全** — 默认本地监听，JWT 认证
 - 🐳 **灵活部署** — Python 直接运行 / Docker / systemd 常驻
 
@@ -65,6 +70,7 @@
 | 配置管理 | `src/config.py` | YAML 配置加载，环境变量覆盖，默认值合并 |
 | 日志采集 | `src/collector/` | 自动发现 MySQL 实例，日志解析，流式读取，watchdog 监控 |
 | MySQL 连接 | `src/collector/mysql_connector.py` | pymysql 连接器，SHOW STATUS/PROCESSLIST/SLAVE STATUS |
+| Redis 连接 | `src/collector/redis_connector.py` | redis-py 异步连接器，INFO/SLOWLOG/CLIENT/LATENCY/MEMORY/CLUSTER |
 | 慢查询解析 | `src/collector/slow_query_parser.py` | 旧格式 + MySQL 5.6+ 新格式慢查询日志解析 |
 | 分析引擎 | `src/analyzer/` | LangGraph 工作流（5 节点），LLM 接口（多提供商） |
 | 死锁分析 | `src/analyzer/deadlock_analyzer.py` | InnoDB 死锁日志解析、锁等待链有向图、DFS 环检测、根因分析 |
@@ -74,8 +80,12 @@
 | 向量搜索 | `src/vector/` | Embedding 管理，turbovec 索引，语义搜索，RAG |
 | 数据存储 | `src/storage/` | SQLite 异步操作，多张表，丰富查询方法 |
 | 告警引擎 | `src/web/api/alert_engine.py` | 规则 CRUD、7 种条件、5 种通知渠道、SMTP 邮件 |
+| Redis 监控 | `src/web/api/redis_monitor.py` | Redis 实时指标、客户端、复制、持久化、延迟 |
+| Redis 慢查询 | `src/web/api/redis_slowlog.py` | SLOWLOG 解析、统计、配置 |
+| Redis 分析 | `src/web/api/redis_analysis.py` | 内存分析、Key 扫描、Key 空间、持久化详情 |
+| Redis 集群 | `src/web/api/redis_cluster.py` | Cluster 节点/槽信息、Sentinel 主从监控 |
 | Web 后端 | `src/web/` | FastAPI + 15 组 REST API + WebSocket + JWT |
-| Web 前端 | `frontend/` | Vue3 + SVG 力导向图谱，17 个可视化组件 |
+| Web 前端 | `frontend/` | Vue3 + SVG 力导向图谱，22 个可视化组件 |
 
 ---
 
@@ -412,6 +422,46 @@ sudo systemctl start mysql-log-analyzer
 | GET | `/api/slow-query/list` | 慢查询列表 |
 | GET | `/api/slow-query/stats` | 慢查询统计 |
 
+### Redis 监控
+
+| 方法 | 路径 | 说明 |
+|------|------|------|
+| GET | `/api/redis/status` | Redis 实时状态指标 |
+| GET | `/api/redis/clients` | 客户端连接列表 |
+| GET | `/api/redis/replication` | 复制状态 |
+| GET | `/api/redis/persistence` | 持久化状态 |
+| GET | `/api/redis/config` | 配置信息 |
+| GET | `/api/redis/latency` | 延迟事件 |
+| POST | `/api/redis/test-connection` | 测试连接 |
+
+### Redis 慢查询
+
+| 方法 | 路径 | 说明 |
+|------|------|------|
+| GET | `/api/redis/slowlog/` | 慢查询列表 |
+| GET | `/api/redis/slowlog/stats` | 慢查询统计 |
+| GET | `/api/redis/slowlog/config` | 慢查询配置 |
+
+### Redis 分析
+
+| 方法 | 路径 | 说明 |
+|------|------|------|
+| GET | `/api/redis/memory` | 内存详细分析 |
+| POST | `/api/redis/keys/scan` | 扫描 Key（手动触发） |
+| GET | `/api/redis/keys/top` | 大 Key 排行 |
+| GET | `/api/redis/keyspace` | Key 空间分布 |
+| GET | `/api/redis/key/{key}` | 单个 Key 详情 |
+| GET | `/api/redis/persistence/detail` | 持久化详细状态 |
+
+### Redis 集群/哨兵
+
+| 方法 | 路径 | 说明 |
+|------|------|------|
+| GET | `/api/redis/cluster/info` | 集群状态概览 |
+| GET | `/api/redis/cluster/nodes` | 集群节点列表 |
+| GET | `/api/redis/sentinel/masters` | Sentinel 主节点 |
+| GET | `/api/redis/sentinel/slaves` | Sentinel 从节点 |
+
 ### WebSocket
 
 | 路径 | 说明 |
@@ -449,16 +499,16 @@ mysql-error-log-analyzer/
 │   └── docker-compose.yaml           # 编排配置
 ├── frontend/
 │   └── src/
-│       ├── components/               # Vue3 组件（17 个）
-│       │   ├── Home.vue              # 首页（MySQL 卡片入口）
-│       │   ├── Dashboard.vue         # 仪表盘
+│       ├── components/               # Vue3 组件（22 个）
+│       │   ├── Home.vue              # 首页（MySQL/Redis 卡片入口）
+│       │   ├── Dashboard.vue         # MySQL 仪表盘
 │       │   ├── LogQuery.vue          # 日志查询
 │       │   ├── AnalysisReport.vue    # 分析报告
 │       │   ├── KnowledgeGraph.vue    # SVG 力导向知识图谱
 │       │   ├── ChatPanel.vue         # AI 对话
 │       │   ├── StatusPanel.vue       # 系统状态
-│       │   ├── MonitorPanel.vue      # 实时监控
-│       │   ├── SlowQuery.vue         # 慢查询分析
+│       │   ├── MonitorPanel.vue      # MySQL 实时监控
+│       │   ├── SlowQuery.vue         # MySQL 慢查询分析
 │       │   ├── AlertPanel.vue        # 智能告警
 │       │   ├── LogSearch.vue         # 全文本搜索
 │       │   ├── PatternPanel.vue      # 模式识别
@@ -468,7 +518,13 @@ mysql-error-log-analyzer/
 │       │   ├── ReportPanel.vue       # 运维报表
 │       │   ├── SettingsPanel.vue     # 设置页面
 │       │   ├── ReplicationPanel.vue  # 复制状态
-│       │   └── LoginPage.vue         # 登录页
+│       │   ├── LoginPage.vue         # 登录页
+│       │   ├── RedisMonitor.vue      # Redis 实时监控
+│       │   ├── RedisSlowlog.vue      # Redis 慢查询
+│       │   ├── RedisMemory.vue       # Redis 内存分析
+│       │   ├── RedisKeys.vue         # Redis Key 分析
+│       │   ├── RedisPersistence.vue  # Redis 持久化
+│       │   └── RedisCluster.vue      # Redis 集群/哨兵
 │       ├── api.js                    # API 封装
 │       ├── router.js                 # 路由配置
 │       └── main.js                   # 入口
@@ -514,7 +570,11 @@ mysql-error-log-analyzer/
 │   │       ├── baseline.py           # 性能基线
 │   │       ├── instances.py          # 多实例管理
 │   │       ├── reports.py            # 运维报表
-│   │       └── settings.py           # 设置
+│   │       ├── settings.py           # 设置
+│   │       ├── redis_monitor.py      # Redis 监控
+│   │       ├── redis_slowlog.py      # Redis 慢查询
+│   │       ├── redis_analysis.py     # Redis 内存/Key/持久化
+│   │       └── redis_cluster.py      # Redis 集群/哨兵
 │   ├── config.py                     # 配置管理
 │   ├── status.py                     # 状态追踪
 │   ├── utils.py                      # 工具函数
@@ -529,28 +589,52 @@ mysql-error-log-analyzer/
 
 ## 验证结果
 
-在真实 MySQL 8.0.46 环境下通过完整端到端验证：
+在真实 MySQL 8.0.46 和 Redis 7.0.15 环境下通过完整端到端验证：
 
-| 测试类别 | 测试项数 | 通过数 |
-|----------|---------|--------|
-| 基础服务 | 1 | 1 |
-| 监控指标采集 | 6 | 6 |
-| 进程列表 | 2 | 2 |
-| InnoDB 状态 | 2 | 2 |
-| 复制状态 | 1 | 1 |
-| 日志采集与统计 | 3 | 3 |
-| 全文本搜索 | 5 | 5 |
-| 模式识别 | 3 | 3 |
-| 死锁分析 | 4 | 4 |
-| 智能告警 | 5 | 5 |
-| 性能基线 | 4 | 4 |
-| 多实例管理 | 5 | 5 |
-| 运维报表 | 2 | 2 |
-| 慢查询分析 | 1 | 1 |
-| 分析与知识图谱 | 1 | 1 |
-| **合计** | **45** | **45** |
+### MySQL 验证（45/45 通过）
 
-压力测试数据：2,485 次查询（QPS 108.7），97 次死锁触发，12 个死锁事件成功解析。
+| 测试类别 | 通过 |
+|----------|------|
+| 基础服务 | 1/1 |
+| 监控指标采集 | 6/6 |
+| 进程列表 | 2/2 |
+| InnoDB 状态 | 2/2 |
+| 复制状态 | 1/1 |
+| 日志采集与统计 | 3/3 |
+| 全文本搜索 | 5/5 |
+| 模式识别 | 3/3 |
+| 死锁分析 | 4/4 |
+| 智能告警 | 5/5 |
+| 性能基线 | 4/4 |
+| 多实例管理 | 5/5 |
+| 运维报表 | 2/2 |
+| 慢查询分析 | 1/1 |
+| 分析与知识图谱 | 1/1 |
+
+### Redis 验证
+
+| 测试类别 | 结果 |
+|----------|------|
+| 实例注册（db_type=redis） | ✓ |
+| 连接测试（7.0.15 standalone） | ✓ |
+| 实时监控（QPS/内存/连接数/命中率/淘汰） | ✓ |
+| 慢查询列表（命令/耗时/客户端） | ✓ |
+| 慢查询统计（命令分布/平均耗时） | ✓ |
+| 客户端列表 | ✓ |
+| 复制状态 | ✓ |
+| 持久化状态 | ✓ |
+| 延迟事件 | ✓ |
+| 配置查询 | ✓ |
+| 内存分析（碎片率/淘汰策略/组成） | ✓ |
+| Key 空间分布 | ✓ |
+| Top Keys | ✓ |
+| Key 扫描（1000 Key，0.06s） | ✓ |
+| 单个 Key 详情 | ✓ |
+| 持久化详情（RDB/AOF/建议） | ✓ |
+| 集群信息（standalone 模式正确返回） | ✓ |
+| Sentinel 信息（standalone 模式正确返回） | ✓ |
+
+压力测试数据：MySQL 2,485 次查询（QPS 108.7），97 次死锁触发，12 个死锁事件成功解析。
 
 ---
 

@@ -17,6 +17,12 @@ import DeadlockPanel from './components/DeadlockPanel.vue'
 import BaselinePanel from './components/BaselinePanel.vue'
 import InstancesPanel from './components/InstancesPanel.vue'
 import ReportPanel from './components/ReportPanel.vue'
+import RedisMonitor from './components/RedisMonitor.vue'
+import RedisSlowlog from './components/RedisSlowlog.vue'
+import RedisMemory from './components/RedisMemory.vue'
+import RedisKeys from './components/RedisKeys.vue'
+import RedisPersistence from './components/RedisPersistence.vue'
+import RedisCluster from './components/RedisCluster.vue'
 
 const routes = [
   { path: '/', name: 'home', component: Home, meta: { title: '数据库选择' } },
@@ -38,6 +44,17 @@ const routes = [
   { path: '/mysql/baseline', name: 'mysql-baseline', component: BaselinePanel, meta: { title: '性能基线', db: 'mysql' } },
   { path: '/mysql/instances', name: 'mysql-instances', component: InstancesPanel, meta: { title: '实例管理', db: 'mysql' } },
   { path: '/mysql/reports', name: 'mysql-reports', component: ReportPanel, meta: { title: '运维报表', db: 'mysql' } },
+  // Redis 子路由
+  { path: '/redis', name: 'redis-monitor', component: RedisMonitor, meta: { title: 'Redis 实时监控', db: 'redis' } },
+  { path: '/redis/slowlog', name: 'redis-slowlog', component: RedisSlowlog, meta: { title: 'Redis 慢查询', db: 'redis' } },
+  { path: '/redis/memory', name: 'redis-memory', component: RedisMemory, meta: { title: 'Redis 内存分析', db: 'redis' } },
+  { path: '/redis/keys', name: 'redis-keys', component: RedisKeys, meta: { title: 'Redis Key 分析', db: 'redis' } },
+  { path: '/redis/persistence', name: 'redis-persistence', component: RedisPersistence, meta: { title: 'Redis 持久化', db: 'redis' } },
+  { path: '/redis/cluster', name: 'redis-cluster', component: RedisCluster, meta: { title: 'Redis 集群/哨兵', db: 'redis' } },
+  { path: '/redis/replication', name: 'redis-replication', component: ReplicationPanel, meta: { title: 'Redis 复制状态', db: 'redis' } },
+  { path: '/redis/alerts', name: 'redis-alerts', component: AlertPanel, meta: { title: 'Redis 智能告警', db: 'redis' } },
+  { path: '/redis/instances', name: 'redis-instances', component: InstancesPanel, meta: { title: 'Redis 实例管理', db: 'redis' } },
+  { path: '/redis/settings', name: 'redis-settings', component: SettingsPanel, meta: { title: 'Redis 设置', db: 'redis' } },
 ]
 
 const router = createRouter({

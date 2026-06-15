@@ -54,42 +54,33 @@
         <div class="db-card-badge">即将推出</div>
       </div>
 
-      <div class="db-card disabled">
+      <!-- Redis 卡片：已支持 -->
+      <div
+        class="db-card redis-card"
+        @click="handleRedisClick"
+        @touchend.passive="handleRedisTouch"
+        role="button"
+        tabindex="0"
+        aria-label="进入 Redis 分析"
+      >
         <div class="db-card-icon">
           <svg viewBox="0 0 64 64" width="56" height="56">
-            <rect x="12" y="8" width="40" height="48" rx="4" fill="none" stroke="#4DB33D" stroke-width="2.5" opacity="0.5"/>
-            <line x1="20" y1="20" x2="44" y2="20" stroke="#4DB33D" stroke-width="2" opacity="0.5"/>
-            <line x1="20" y1="30" x2="44" y2="30" stroke="#4DB33D" stroke-width="2" opacity="0.5"/>
-            <line x1="20" y1="40" x2="36" y2="40" stroke="#4DB33D" stroke-width="2" opacity="0.5"/>
-          </svg>
-        </div>
-        <div class="db-card-info">
-          <h2 class="db-card-name">MongoDB</h2>
-          <p class="db-card-desc">即将支持</p>
-        </div>
-        <div class="db-card-status">
-          <span class="status-dot"></span>
-          <span class="status-text">规划中</span>
-        </div>
-        <div class="db-card-badge">即将推出</div>
-      </div>
-
-      <div class="db-card disabled">
-        <div class="db-card-icon">
-          <svg viewBox="0 0 64 64" width="56" height="56">
-            <circle cx="32" cy="32" r="22" fill="none" stroke="#C74634" stroke-width="2.5" opacity="0.5"/>
-            <path d="M20 32 L44 32 M32 20 L32 44" stroke="#C74634" stroke-width="2" opacity="0.5"/>
+            <rect x="12" y="14" width="40" height="10" rx="2" fill="#DC382D" opacity="0.9"/>
+            <rect x="12" y="27" width="40" height="10" rx="2" fill="#DC382D" opacity="0.75"/>
+            <rect x="12" y="40" width="40" height="10" rx="2" fill="#DC382D" opacity="0.6"/>
+            <path d="M12 14 L32 4 L52 14" fill="none" stroke="#DC382D" stroke-width="2.5" opacity="0.9"/>
+            <path d="M32 4 L32 50" stroke="#DC382D" stroke-width="1.5" opacity="0.4"/>
           </svg>
         </div>
         <div class="db-card-info">
           <h2 class="db-card-name">Redis</h2>
-          <p class="db-card-desc">即将支持</p>
+          <p class="db-card-desc">实时监控与慢查询分析</p>
         </div>
         <div class="db-card-status">
-          <span class="status-dot"></span>
-          <span class="status-text">规划中</span>
+          <span class="status-dot active"></span>
+          <span class="status-text">已就绪</span>
         </div>
-        <div class="db-card-badge">即将推出</div>
+        <div class="db-card-arrow">→</div>
       </div>
     </div>
 
@@ -125,6 +116,25 @@ function handleMysqlTouch(e) {
   // touchend 触发后不再触发 click（移动端）
   e.preventDefault()
   navigateToMysql()
+}
+
+// Redis 导航
+function navigateToRedis() {
+  if (navigating) return
+  navigating = true
+  console.log('[Home] 导航到 Redis (SPA)')
+  router.push('/redis').catch(() => {})
+  setTimeout(() => { navigating = false }, 1000)
+}
+
+function handleRedisClick(e) {
+  e.preventDefault()
+  navigateToRedis()
+}
+
+function handleRedisTouch(e) {
+  e.preventDefault()
+  navigateToRedis()
 }
 </script>
 
@@ -196,6 +206,18 @@ function handleMysqlTouch(e) {
   background: var(--bg-hover);
 }
 
+/* Redis 卡片特殊样式 */
+.db-card.redis-card:hover {
+  border-color: #DC382D;
+  transform: translateY(-2px);
+  box-shadow: 0 8px 24px rgba(220, 56, 45, 0.12);
+}
+
+.db-card.redis-card:active {
+  transform: scale(0.98);
+  background: var(--bg-hover);
+}
+
 .db-card.disabled {
   cursor: default;
   opacity: 0.6;
@@ -256,6 +278,12 @@ function handleMysqlTouch(e) {
 .db-card.mysql-card:hover .db-card-arrow {
   opacity: 1;
   transform: translateX(4px);
+}
+
+.db-card.redis-card:hover .db-card-arrow {
+  opacity: 1;
+  transform: translateX(4px);
+  color: #DC382D;
 }
 
 .db-card-badge {

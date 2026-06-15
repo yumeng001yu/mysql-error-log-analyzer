@@ -29,8 +29,9 @@ class CreateInstanceRequest(BaseModel):
     name: str
     host: str = "localhost"
     port: int = 3306
-    log_path: str
+    log_path: str = ""
     group_name: Optional[str] = None
+    db_type: str = "mysql"  # mysql / redis
     credentials: Optional[CredentialsModel] = None
 
 
@@ -41,6 +42,7 @@ class UpdateInstanceRequest(BaseModel):
     port: Optional[int] = None
     log_path: Optional[str] = None
     group_name: Optional[str] = None
+    db_type: Optional[str] = None
     credentials: Optional[CredentialsModel] = None
 
 
@@ -81,6 +83,7 @@ async def _ensure_columns():
         ("status", "TEXT DEFAULT 'unknown'"),
         ("last_collected_at", "TEXT DEFAULT NULL"),
         ("credentials", "TEXT DEFAULT NULL"),
+        ("db_type", "TEXT DEFAULT 'mysql'"),
     ]
 
     for col_name, col_type in new_columns:
@@ -136,6 +139,7 @@ def _format_instance(row: dict) -> dict:
         "group_name": row.get("group_name"),
         "status": row.get("status", "unknown"),
         "last_collected_at": row.get("last_collected_at"),
+        "db_type": row.get("db_type", "mysql"),
         "credentials": _mask_credentials(row.get("credentials")),
         "created_at": row.get("created_at"),
     }
@@ -191,7 +195,7 @@ async def list_instances(
 
 @router.post("/")
 async def create_instance(body: CreateInstanceRequest = Body(...)):
-    """注册新的 MySQL 实例"""
+    """注册新的数据库实例（MySQL/Redis）"""
     await _ensure_columns()
 
     db = _get_db()
@@ -202,10 +206,10 @@ async def create_instance(body: CreateInstanceRequest = Body(...)):
     # 序列化凭据为 JSON
     creds_json = None
     if body.credentials:
-        creds_json = json.dumps(
-            {"user": body.credentials.user, "password": body.credentials.password},
-            ensure_ascii=False,
-        )
+        creds_data = {"user": body.credentials.user, "password": body.credentials.password}
+        if body.db_type == "redis":
+            creds_data = {"username": body.credentials.user, "password": body.credentials.password}
+        creds_json = json.dumps(creds_data, ensure_ascii=False)
 
     # 检查同名实例是否已存在
     cursor = await conn.execute(
@@ -215,9 +219,9 @@ async def create_instance(body: CreateInstanceRequest = Body(...)):
         raise HTTPException(status_code=409, detail=f"实例名称 '{body.name}' 已存在")
 
     await conn.execute(
-        """INSERT INTO instances (name, host, port, log_path, group_name, status, credentials, created_at)
-           VALUES (?, ?, ?, ?, ?, 'online', ?, ?)""",
-        (body.name, body.host, body.port, body.log_path, body.group_name, creds_json, now),
+        """INSERT INTO instances (name, host, port, log_path, group_name, status, credentials, db_type, created_at)
+           VALUES (?, ?, ?, ?, ?, 'online', ?, ?, ?)""",
+        (body.name, body.host, body.port, body.log_path, body.group_name, creds_json, body.db_type, now),
     )
     await conn.commit()
 
@@ -338,7 +342,7 @@ async def delete_instance(instance_id: int):
 
 @router.post("/{instance_id}/test")
 async def test_instance_connection(instance_id: int):
-    """测试实例连接"""
+    """测试实例连接（支持 MySQL 和 Redis）"""
     await _ensure_columns()
 
     db = _get_db()
@@ -355,6 +359,7 @@ async def test_instance_connection(instance_id: int):
     instance = dict(row)
     host = instance.get("host", "localhost")
     port = instance.get("port", 3306)
+    db_type = instance.get("db_type", "mysql")
 
     # 解析凭据
     user = "root"
@@ -363,65 +368,85 @@ async def test_instance_connection(instance_id: int):
     if creds_raw:
         try:
             creds = json.loads(creds_raw)
-            user = creds.get("user", "root")
+            user = creds.get("user", creds.get("username", "root"))
             password = creds.get("password", "")
         except (json.JSONDecodeError, TypeError):
             pass
 
-    # 尝试使用 pymysql 连接
-    try:
-        import pymysql
-    except ImportError:
-        return {"connected": False, "version": "", "error": "pymysql 未安装，请执行 pip install pymysql"}
+    if db_type == "redis":
+        # Redis 连接测试
+        try:
+            from src.collector.redis_connector import RedisConnector
+        except ImportError:
+            return {"connected": False, "version": "", "error": "redis 未安装，请执行 pip install redis"}
 
-    def _do_connect():
-        """同步执行连接测试"""
-        c = pymysql.connect(
-            host=host, port=port, user=user, password=password,
-            connect_timeout=5,
-        )
-        version = c.server_version
-        c.close()
-        return version
+        connector = RedisConnector(host=host, port=port, password=password or None, username=user if user != "root" else None)
+        try:
+            result = await connector.test_connection()
+            status = "online" if result["success"] else "error"
+            await conn.execute(
+                "UPDATE instances SET status = ? WHERE id = ?",
+                (status, instance_id),
+            )
+            await conn.commit()
+            return result
+        finally:
+            await connector.close()
+    else:
+        # MySQL 连接测试
+        try:
+            import pymysql
+        except ImportError:
+            return {"connected": False, "version": "", "error": "pymysql 未安装，请执行 pip install pymysql"}
 
-    try:
-        version = await asyncio.to_thread(_do_connect)
-        # 连接成功，更新实例状态
-        await conn.execute(
-            "UPDATE instances SET status = 'online' WHERE id = ?",
-            (instance_id,),
-        )
-        await conn.commit()
-        return {"connected": True, "version": str(version), "error": ""}
-    except pymysql.err.OperationalError as e:
-        error_code = e.args[0] if e.args else 0
-        error_msg = str(e)[:200]
+        def _do_connect():
+            """同步执行连接测试"""
+            c = pymysql.connect(
+                host=host, port=port, user=user, password=password,
+                connect_timeout=5,
+            )
+            version = c.server_version
+            c.close()
+            return version
 
-        # 根据错误码判断状态
-        if error_code in (1045, 28000):
-            # 认证失败
-            status = "auth_failed"
-        elif error_code in (2003, 2006):
-            # 连接拒绝/超时
-            status = "unreachable"
-        else:
-            status = "error"
+        try:
+            version = await asyncio.to_thread(_do_connect)
+            # 连接成功，更新实例状态
+            await conn.execute(
+                "UPDATE instances SET status = 'online' WHERE id = ?",
+                (instance_id,),
+            )
+            await conn.commit()
+            return {"connected": True, "version": str(version), "error": ""}
+        except pymysql.err.OperationalError as e:
+            error_code = e.args[0] if e.args else 0
+            error_msg = str(e)[:200]
 
-        await conn.execute(
-            "UPDATE instances SET status = ? WHERE id = ?",
-            (status, instance_id),
-        )
-        await conn.commit()
+            # 根据错误码判断状态
+            if error_code in (1045, 28000):
+                # 认证失败
+                status = "auth_failed"
+            elif error_code in (2003, 2006):
+                # 连接拒绝/超时
+                status = "unreachable"
+            else:
+                status = "error"
 
-        return {"connected": False, "version": "", "error": error_msg}
-    except Exception as e:
-        error_msg = str(e)[:200]
-        await conn.execute(
-            "UPDATE instances SET status = 'error' WHERE id = ?",
-            (instance_id,),
-        )
-        await conn.commit()
-        return {"connected": False, "version": "", "error": error_msg}
+            await conn.execute(
+                "UPDATE instances SET status = ? WHERE id = ?",
+                (status, instance_id),
+            )
+            await conn.commit()
+
+            return {"connected": False, "version": "", "error": error_msg}
+        except Exception as e:
+            error_msg = str(e)[:200]
+            await conn.execute(
+                "UPDATE instances SET status = 'error' WHERE id = ?",
+                (instance_id,),
+            )
+            await conn.commit()
+            return {"connected": False, "version": "", "error": error_msg}
 
 
 @router.get("/{instance_id}/status")

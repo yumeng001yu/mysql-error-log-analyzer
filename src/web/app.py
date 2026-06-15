@@ -137,6 +137,10 @@ def create_app() -> FastAPI:
     from src.web.api.baseline import router as baseline_router
     from src.web.api.reports import router as reports_router
     from src.web.api.deadlock import router as deadlock_router
+    from src.web.api.redis_monitor import router as redis_monitor_router
+    from src.web.api.redis_slowlog import router as redis_slowlog_router
+    from src.web.api.redis_analysis import router as redis_analysis_router
+    from src.web.api.redis_cluster import router as redis_cluster_router
     from src.web.websocket import router as ws_router
 
     app.include_router(auth_router)
@@ -153,6 +157,10 @@ def create_app() -> FastAPI:
     app.include_router(baseline_router)
     app.include_router(reports_router)
     app.include_router(deadlock_router)
+    app.include_router(redis_monitor_router)
+    app.include_router(redis_slowlog_router)
+    app.include_router(redis_analysis_router)
+    app.include_router(redis_cluster_router)
     app.include_router(ws_router)
 
     # ── 启动事件 ─────────────────────────────────────────

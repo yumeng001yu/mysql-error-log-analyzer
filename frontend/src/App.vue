@@ -214,16 +214,40 @@ export default {
       { path: '/mysql/settings', icon: '🔧', label: '设置' }
     ]
 
+    // Redis 导航项
+    const redisNavItems = [
+      { path: '/redis', icon: '💓', label: '实时监控' },
+      { path: '/redis/slowlog', icon: '🐢', label: '慢查询' },
+      { path: '/redis/memory', icon: '💾', label: '内存分析' },
+      { path: '/redis/keys', icon: '🔑', label: 'Key 分析' },
+      { path: '/redis/persistence', icon: '💿', label: '持久化' },
+      { path: '/redis/cluster', icon: '🌐', label: '集群/哨兵' },
+      { path: '/redis/replication', icon: '🔗', label: '复制状态' },
+      { path: '/redis/alerts', icon: '🔔', label: '智能告警' },
+      { path: '/redis/instances', icon: '🖥️', label: '实例管理' },
+      { path: '/redis/settings', icon: '🔧', label: '设置' }
+    ]
+
+    const redisBottomNavItems = [
+      { path: '/redis', icon: '💓', label: '监控' },
+      { path: '/redis/slowlog', icon: '🐢', label: '慢查询' },
+      { path: '/redis/keys', icon: '🔑', label: 'Key' },
+      { path: '/redis/alerts', icon: '🔔', label: '告警' },
+      { path: '/redis/settings', icon: '🔧', label: '设置' }
+    ]
+
     // 根据当前路由动态选择导航项
     const currentNavItems = computed(() => {
       const db = route.meta?.db
       if (db === 'mysql') return mysqlNavItems
+      if (db === 'redis') return redisNavItems
       return mysqlNavItems // 默认
     })
 
     const currentBottomNavItems = computed(() => {
       const db = route.meta?.db
       if (db === 'mysql') return mysqlBottomNavItems
+      if (db === 'redis') return redisBottomNavItems
       return mysqlBottomNavItems
     })
 
