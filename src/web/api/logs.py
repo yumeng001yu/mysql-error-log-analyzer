@@ -7,10 +7,11 @@ from fastapi import APIRouter, Depends, Query
 from pydantic import BaseModel
 
 from src.config import Config
-from src.storage.database import DatabaseManager
 from src.vector.manager import VectorSearchManager
 from src.web.api.auth import get_current_user
 from src.utils import parse_time_range_datetime
+from src.web.api.common import resolve_time_range as _resolve_time_range
+from src.web.api.deps import get_db as _get_db
 
 router = APIRouter(prefix="/api/logs", tags=["日志"])
 
@@ -68,16 +69,7 @@ class TrendResponse(BaseModel):
 
 # ── 数据库实例 ──────────────────────────────────────────────
 
-_db: DatabaseManager | None = None
-
 _vector_search: VectorSearchManager | None = None
-
-
-def _get_db() -> DatabaseManager:
-    global _db
-    if _db is None:
-        _db = DatabaseManager()
-    return _db
 
 
 def _get_vector_search() -> VectorSearchManager:
@@ -85,18 +77,6 @@ def _get_vector_search() -> VectorSearchManager:
     if _vector_search is None:
         _vector_search = VectorSearchManager()
     return _vector_search
-
-
-def _resolve_time_range(period: Optional[str] = None, start_time: Optional[str] = None, end_time: Optional[str] = None):
-    """将 period 参数解析为 start_time/end_time"""
-    if start_time and end_time:
-        return start_time, end_time
-    if period and period != "all":
-        result = parse_time_range_datetime(period)
-        st = result.get("start")
-        et = result.get("end")
-        return st.isoformat() if st else None, et.isoformat() if et else None
-    return None, None
 
 
 # ── API 端点 ────────────────────────────────────────────────

@@ -145,6 +145,7 @@
 <script setup>
 import { ref, onMounted } from 'vue'
 import { api } from '../api.js'
+import { formatDuration as formatTime } from '../utils/datetime.js'
 
 const period = ref('7d')
 const customValue = ref(null)
@@ -168,16 +169,6 @@ const periods = [
 
 function getPeriodParam() {
   return period.value === 'all' ? '' : period.value
-}
-
-function formatTime(val) {
-  if (val == null) return '-'
-  const num = Number(val)
-  if (isNaN(num)) return '-'
-  if (num >= 3600) return (num / 3600).toFixed(2) + 'h'
-  if (num >= 60) return (num / 60).toFixed(2) + 'm'
-  if (num >= 1) return num.toFixed(2) + 's'
-  return (num * 1000).toFixed(0) + 'ms'
 }
 
 function formatNumber(val) {

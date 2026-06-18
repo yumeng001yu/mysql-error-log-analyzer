@@ -7,8 +7,8 @@ from pydantic import BaseModel
 
 from src.config import Config
 from src.status import StatusTracker
-from src.storage.database import DatabaseManager
 from src.web.api.auth import get_current_user
+from src.web.api.deps import get_db as _get_db
 
 router = APIRouter(tags=["状态"])
 
@@ -32,19 +32,6 @@ class SummaryResponse(BaseModel):
     summary: str
 
 
-class InstanceInfo(BaseModel):
-    id: int
-    name: str
-    host: str
-    port: int
-    log_count: int = 0
-    alert_count: int = 0
-
-
-class InstancesResponse(BaseModel):
-    instances: list[InstanceInfo]
-
-
 class AlertItem(BaseModel):
     id: int
     instance_id: int
@@ -62,18 +49,6 @@ class AlertsResponse(BaseModel):
 class AlertReadResponse(BaseModel):
     success: bool
     alert_id: int
-
-
-# ── 数据库实例 ──────────────────────────────────────────────
-
-_db: DatabaseManager | None = None
-
-
-def _get_db() -> DatabaseManager:
-    global _db
-    if _db is None:
-        _db = DatabaseManager()
-    return _db
 
 
 # ── API 端点 ────────────────────────────────────────────────
@@ -96,28 +71,6 @@ async def get_status_summary(
     tracker = StatusTracker()
     summary = tracker.get_summary()
     return SummaryResponse(summary=summary)
-
-
-@router.get("/api/instances", response_model=InstancesResponse)
-async def get_instances(
-    user: Optional[str] = Depends(get_current_user),
-):
-    """获取监控实例列表"""
-    db = _get_db()
-    stats = await db.get_stats()
-
-    instances = []
-    for inst in stats.get("instances", []):
-        instances.append(InstanceInfo(
-            id=inst.get("id", 0),
-            name=inst.get("name", "unknown"),
-            host=inst.get("host", "localhost"),
-            port=inst.get("port", 3306),
-            log_count=inst.get("log_count", 0),
-            alert_count=inst.get("alert_count", 0),
-        ))
-
-    return InstancesResponse(instances=instances)
 
 
 @router.get("/api/alerts", response_model=AlertsResponse)

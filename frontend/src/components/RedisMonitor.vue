@@ -224,6 +224,7 @@
 import { ref, onMounted, onUnmounted } from 'vue'
 import { useRoute } from 'vue-router'
 import { api } from '../api.js'
+import { formatPercent, formatBytes } from '../utils/format.js'
 
 const route = useRoute()
 const instanceId = ref(route.query.instance_id || '')
@@ -252,14 +253,6 @@ function formatUptime(seconds) {
   if (d > 0) return `${d}天${h}小时`
   if (h > 0) return `${h}小时${m}分`
   return `${m}分钟`
-}
-
-// 格式化百分比
-function formatPercent(val) {
-  if (val == null) return '-'
-  const num = Number(val)
-  if (isNaN(num)) return '-'
-  return num.toFixed(1) + '%'
 }
 
 // 连接状态样式
@@ -298,48 +291,56 @@ async function loadStatus() {
     const params = {}
     if (instanceId.value) params.instance_id = instanceId.value
     const res = await api.getRedisStatus(params)
-    const data = res.data || {}
+    const raw = res.data || {}
+
+    // API 返回嵌套结构: { server, clients, memory, stats, network, persistence, replication }
+    const server = raw.server || {}
+    const clientData = raw.clients || {}
+    const memoryData = raw.memory || {}
+    const statsData = raw.stats || {}
+    const persistData = raw.persistence || {}
+    const replData = raw.replication || {}
 
     // 服务器信息
     serverInfo.value = {
-      version: data.redis_version || data.version,
-      mode: data.redis_mode || data.mode,
-      uptime: data.uptime_in_seconds || data.uptime,
-      os: data.os
+      version: server.version || raw.redis_version,
+      mode: server.mode || raw.redis_mode,
+      uptime: server.uptime || raw.uptime_in_seconds,
+      os: server.os || raw.os
     }
 
     // 核心指标
     metrics.value = {
-      qps: data.instantaneous_ops_per_sec || data.qps,
-      connected_clients: data.connected_clients,
-      hit_rate: data.hit_rate ?? data.keyspace_hit_rate,
-      evicted_keys: data.evicted_keys,
-      expired_keys: data.expired_keys
+      qps: statsData.qps ?? raw.instantaneous_ops_per_sec,
+      connected_clients: clientData.connected ?? raw.connected_clients,
+      hit_rate: statsData.hit_rate ?? raw.keyspace_hit_rate,
+      evicted_keys: statsData.evicted_keys ?? raw.evicted_keys,
+      expired_keys: statsData.expired_keys ?? raw.expired_keys
     }
 
     // 内存信息
     memory.value = {
-      used_memory_human: data.used_memory_human,
-      used_memory_peak_human: data.used_memory_peak_human,
-      maxmemory_human: data.maxmemory_human || (data.maxmemory && Number(data.maxmemory) > 0 ? formatBytes(data.maxmemory) : '无限制'),
-      usage_percent: data.memory_usage_percent ?? data.usage_percent,
-      fragmentation_ratio: data.mem_fragmentation_ratio ?? data.fragmentation_ratio,
-      maxmemory_policy: data.maxmemory_policy
+      used_memory_human: memoryData.used_memory_human || raw.used_memory_human,
+      used_memory_peak_human: memoryData.used_memory_peak_human || raw.used_memory_peak_human,
+      maxmemory_human: memoryData.maxmemory_human || raw.maxmemory_human || (memoryData.maxmemory && Number(memoryData.maxmemory) > 0 ? formatBytes(memoryData.maxmemory) : '无限制'),
+      usage_percent: memoryData.usage_percent ?? raw.memory_usage_percent,
+      fragmentation_ratio: memoryData.fragmentation_ratio ?? raw.mem_fragmentation_ratio,
+      maxmemory_policy: memoryData.maxmemory_policy || raw.maxmemory_policy
     }
 
     // 客户端信息
-    const maxclients = data.maxclients || data.max_clients
-    const connected = Number(data.connected_clients) || 0
+    const maxclients = clientData.maxclients || raw.maxclients
+    const connected = Number(clientData.connected) || 0
     clients.value = {
-      connected: data.connected_clients,
-      blocked: data.blocked_clients,
+      connected: clientData.connected ?? raw.connected_clients,
+      blocked: clientData.blocked ?? raw.blocked_clients,
       maxclients: maxclients,
-      usage_percent: maxclients && Number(maxclients) > 0 ? (connected / Number(maxclients) * 100) : null
+      usage_percent: clientData.usage_percent ?? (maxclients && Number(maxclients) > 0 ? (connected / Number(maxclients) * 100) : null)
     }
 
     // 连接状态
-    connectionClass.value = data.error ? 'badge-red' : 'badge-green'
-    connectionLabel.value = data.error ? '连接失败' : '已连接'
+    connectionClass.value = raw.connected === false ? 'badge-red' : 'badge-green'
+    connectionLabel.value = raw.connected === false ? '连接失败' : '已连接'
 
     error.value = ''
   } catch (e) {
@@ -355,12 +356,14 @@ async function loadPersistence() {
     const params = {}
     if (instanceId.value) params.instance_id = instanceId.value
     const res = await api.getRedisPersistence(params)
-    const data = res.data || {}
+    const raw = res.data || {}
+    const rdb = raw.rdb || {}
+    const aof = raw.aof || {}
     persistence.value = {
-      rdb_last_save_time: data.rdb_last_save_time || data.last_save_time || '-',
-      rdb_changes_since_last_save: data.rdb_changes_since_last_save ?? data.changes_since_last_save,
-      aof_enabled: data.aof_enabled,
-      aof_rewrite_in_progress: data.aof_rewrite_in_progress
+      rdb_last_save_time: rdb.last_save_time || raw.rdb_last_save_time || '-',
+      rdb_changes_since_last_save: rdb.changes_since_last_save ?? raw.rdb_changes_since_last_save,
+      aof_enabled: aof.enabled ?? raw.aof_enabled,
+      aof_rewrite_in_progress: aof.rewrite_in_progress ?? raw.aof_rewrite_in_progress
     }
   } catch (e) {
     console.error('loadRedisPersistence error', e)
@@ -373,10 +376,10 @@ async function loadReplication() {
     const params = {}
     if (instanceId.value) params.instance_id = instanceId.value
     const res = await api.getRedisReplication(params)
-    const data = res.data || {}
+    const raw = res.data || {}
     replication.value = {
-      role: data.role,
-      connected_slaves: data.connected_slaves
+      role: raw.role,
+      connected_slaves: raw.connected_slaves
     }
   } catch (e) {
     console.error('loadRedisReplication error', e)
@@ -404,15 +407,6 @@ async function loadLatency() {
   } finally {
     latencyLoading.value = false
   }
-}
-
-// 格式化字节数
-function formatBytes(bytes) {
-  const num = Number(bytes)
-  if (isNaN(num) || num === 0) return '0B'
-  const units = ['B', 'KB', 'MB', 'GB', 'TB']
-  const i = Math.floor(Math.log(num) / Math.log(1024))
-  return (num / Math.pow(1024, i)).toFixed(2) + units[i]
 }
 
 // 加载全部数据

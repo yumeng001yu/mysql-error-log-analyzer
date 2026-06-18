@@ -188,6 +188,7 @@
 <script setup>
 import { ref, onMounted } from 'vue'
 import { api } from '../api.js'
+import { formatDateTimeMinute as formatTime } from '../utils/datetime.js'
 
 const reportTabs = [
   { label: '日报', value: 'daily' },
@@ -218,17 +219,6 @@ function scoreClass(score) {
   if (score < 60) return 'score-red'
   if (score < 80) return 'score-yellow'
   return 'score-green'
-}
-
-function formatTime(t) {
-  if (!t) return ''
-  const d = new Date(t)
-  const y = d.getFullYear()
-  const m = String(d.getMonth() + 1).padStart(2, '0')
-  const day = String(d.getDate()).padStart(2, '0')
-  const h = String(d.getHours()).padStart(2, '0')
-  const min = String(d.getMinutes()).padStart(2, '0')
-  return `${y}-${m}-${day} ${h}:${min}`
 }
 
 async function loadReportList() {

@@ -7,8 +7,8 @@ from typing import Optional
 
 from fastapi import APIRouter, Body, HTTPException, Query
 
-from src.storage.database import DatabaseManager
 from src.web.api.alert_engine import AlertEngine
+from src.web.api.deps import get_db as _get_db
 
 logger = logging.getLogger(__name__)
 
@@ -17,16 +17,7 @@ router = APIRouter(prefix="/api/alerts", tags=["alerts"])
 
 # ── 数据库与引擎实例 ──────────────────────────────────────
 
-_db: DatabaseManager | None = None
 _engine: AlertEngine | None = None
-
-
-def _get_db() -> DatabaseManager:
-    """获取数据库管理器实例"""
-    global _db
-    if _db is None:
-        _db = DatabaseManager()
-    return _db
 
 
 def _get_engine() -> AlertEngine:

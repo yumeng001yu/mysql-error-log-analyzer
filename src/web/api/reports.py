@@ -7,7 +7,8 @@ from typing import Optional
 from fastapi import APIRouter, HTTPException, Query
 
 from src.analyzer.report_generator import ReportGenerator
-from src.storage.database import DatabaseManager
+from src.web.api.common import report_to_dict as _report_to_dict
+from src.web.api.deps import get_db as _get_db
 
 logger = logging.getLogger(__name__)
 
@@ -15,16 +16,7 @@ router = APIRouter(prefix="/api/reports", tags=["reports"])
 
 # ── 数据库与生成器实例 ──────────────────────────────────
 
-_db: DatabaseManager | None = None
 _generator: ReportGenerator | None = None
-
-
-def _get_db() -> DatabaseManager:
-    """获取数据库管理器实例"""
-    global _db
-    if _db is None:
-        _db = DatabaseManager()
-    return _db
 
 
 def _get_generator() -> ReportGenerator:
@@ -33,29 +25,6 @@ def _get_generator() -> ReportGenerator:
     if _generator is None:
         _generator = ReportGenerator()
     return _generator
-
-
-def _report_to_dict(report) -> dict:
-    """将 OperationsReport 对象转换为可序列化的字典"""
-    return {
-        "id": report.id,
-        "report_type": report.report_type,
-        "period_start": report.period_start,
-        "period_end": report.period_end,
-        "generated_at": report.generated_at,
-        "instance_id": report.instance_id,
-        "instance_name": report.instance_name,
-        "sections": [
-            {
-                "title": s.title,
-                "content_type": s.content_type,
-                "data": s.data,
-            }
-            for s in report.sections
-        ],
-        "summary": report.summary,
-        "health_score": report.health_score,
-    }
 
 
 # ── API 端点 ────────────────────────────────────────────

@@ -225,6 +225,8 @@
 <script setup>
 import { ref, computed, onMounted, reactive } from 'vue'
 import { api } from '../api.js'
+import { useMessage } from '../composables/useMessage.js'
+import { formatDateTimeMinute as formatTime } from '../utils/datetime.js'
 
 // 状态
 const loading = ref(false)
@@ -233,7 +235,7 @@ const groups = ref([])
 const overview = reactive({ total: 0, healthy: 0, unhealthy: 0 })
 const activeGroup = ref('')
 const groupExpanded = ref(false)
-const message = reactive({ text: '', type: 'info' })
+const { message, showMessage } = useMessage()
 
 // 表单弹窗
 const showFormModal = ref(false)
@@ -266,22 +268,7 @@ const filteredInstances = computed(() => {
   return instances.value.filter(i => i.group === activeGroup.value)
 })
 
-// 提示消息
-function showMessage(text, type = 'info') {
-  message.text = text
-  message.type = type
-  setTimeout(() => { message.text = '' }, 3000)
-}
-
 // 时间格式化
-function formatTime(t) {
-  if (!t) return '-'
-  const d = new Date(t)
-  if (isNaN(d.getTime())) return t
-  const pad = n => String(n).padStart(2, '0')
-  return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())} ${pad(d.getHours())}:${pad(d.getMinutes())}`
-}
-
 function formatUptime(seconds) {
   if (!seconds && seconds !== 0) return '-'
   const s = Number(seconds)

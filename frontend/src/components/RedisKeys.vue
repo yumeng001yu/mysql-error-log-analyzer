@@ -156,6 +156,7 @@
 import { ref, onMounted } from 'vue'
 import { useRoute } from 'vue-router'
 import { api } from '../api.js'
+import { formatBytes as formatMemory } from '../utils/format.js'
 
 const route = useRoute()
 const instanceId = ref(route.query.instance_id || '')
@@ -186,16 +187,6 @@ function formatTTL(val) {
   if (num < 3600) return `${Math.floor(num / 60)}分${num % 60}秒`
   if (num < 86400) return `${Math.floor(num / 3600)}小时${Math.floor((num % 3600) / 60)}分`
   return `${Math.floor(num / 86400)}天${Math.floor((num % 86400) / 3600)}小时`
-}
-
-// 格式化内存
-function formatMemory(val) {
-  if (val == null) return '-'
-  const num = Number(val)
-  if (isNaN(num) || num === 0) return '0B'
-  const units = ['B', 'KB', 'MB', 'GB', 'TB']
-  const i = Math.floor(Math.log(num) / Math.log(1024))
-  return (num / Math.pow(1024, i)).toFixed(2) + units[i]
 }
 
 // 截断键名

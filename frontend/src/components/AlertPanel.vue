@@ -372,23 +372,18 @@
 <script setup>
 import { ref, reactive, computed, watch, onMounted } from 'vue'
 import { api } from '../api.js'
+import { useMessage } from '../composables/useMessage.js'
 
 // ==================== 通用 ====================
 
 const activeTab = ref('history')
-const message = reactive({ text: '', type: '' })
+const { message, showMessage } = useMessage()
 
 const tabs = [
   { key: 'history', label: '告警历史' },
   { key: 'rules', label: '告警规则' },
   { key: 'channels', label: '通知渠道' }
 ]
-
-function showMessage(text, type = 'success') {
-  message.text = text
-  message.type = type
-  setTimeout(() => { message.text = '' }, 3000)
-}
 
 function levelLabel(level) {
   const map = { critical: 'Critical', warning: 'Warning', info: 'Info' }

@@ -132,6 +132,7 @@
 import { ref, computed, onMounted, onUnmounted } from 'vue'
 import { useRoute } from 'vue-router'
 import { api } from '../api.js'
+import { formatTimestamp } from '../utils/datetime.js'
 
 const route = useRoute()
 const instanceId = ref(route.query.instance_id || '')
@@ -144,8 +145,14 @@ const stats = ref({})
 const slowlogConfig = ref({})
 let refreshTimer = null
 
-// 命令分布（从列表中计算）
+// 命令分布（优先使用 API 返回的统计，否则从列表中计算）
 const commandDistribution = computed(() => {
+  const apiDist = stats.value.command_distribution
+  if (apiDist && typeof apiDist === 'object' && Object.keys(apiDist).length > 0) {
+    return Object.entries(apiDist)
+      .map(([command, count]) => ({ command, count }))
+      .sort((a, b) => b.count - a.count)
+  }
   const map = {}
   for (const item of slowlogList.value) {
     const cmd = getCommandName(item)
@@ -158,8 +165,12 @@ const commandDistribution = computed(() => {
     .sort((a, b) => b.count - a.count)
 })
 
-// Top 10 最慢查询
+// Top 10 最慢查询（优先使用 API 返回的 top_slow，否则从列表中排序）
 const topSlowest = computed(() => {
+  const apiTop = stats.value.top_slow
+  if (apiTop && Array.isArray(apiTop) && apiTop.length > 0) {
+    return apiTop.slice(0, 10)
+  }
   return [...slowlogList.value]
     .sort((a, b) => {
       const da = getDurationUs(a)
@@ -235,25 +246,16 @@ function getDurationClass(val) {
   return 'dur-green'
 }
 
-// 格式化时间戳
-function formatTimestamp(val) {
-  if (!val) return '-'
-  // 如果是 Unix 时间戳（秒）
-  const num = Number(val)
-  if (!isNaN(num) && num > 1e9 && num < 1e12) {
-    const d = new Date(num * 1000)
-    return d.toLocaleString('zh-CN', { hour12: false })
-  }
-  if (!isNaN(num) && num > 1e12) {
-    const d = new Date(num)
-    return d.toLocaleString('zh-CN', { hour12: false })
-  }
-  return String(val)
-}
-
 // 获取客户端信息
 function getClient(item) {
   if (item.client) return item.client
+  if (item.client_ip) {
+    const port = item.client_port
+    const name = item.client_name
+    let result = port ? `${item.client_ip}:${port}` : item.client_ip
+    if (name && name !== item.client_ip) result += ` (${name})`
+    return result
+  }
   if (item.client_address || item.ip) {
     const addr = item.client_address || item.ip
     const port = item.client_port || item.port
@@ -298,7 +300,14 @@ async function loadStats() {
     const params = {}
     if (instanceId.value) params.instance_id = instanceId.value
     const res = await api.getRedisSlowlogStats(params)
-    stats.value = res.data || {}
+    const data = res.data || {}
+    stats.value = {
+      total_count: data.total_entries ?? data.total_count,
+      avg_duration: data.avg_duration_ms ?? data.avg_duration,
+      max_duration: data.max_duration_ms ?? data.max_duration,
+      command_distribution: data.command_distribution || {},
+      top_slow: data.top_slow || []
+    }
   } catch (e) {
     console.error('loadRedisSlowlogStats error', e)
     stats.value = {}
@@ -313,8 +322,8 @@ async function loadConfig() {
     const res = await api.getRedisSlowlogConfig(params)
     const data = res.data || {}
     slowlogConfig.value = {
-      slower_than: data.slowlog_log_slower_than ?? data.slower_than ?? data.slowlog-log-slower-than,
-      max_len: data.slowlog_max_len ?? data.max_len ?? data.slowlog-max-len
+      slower_than: data.slowlog_log_slower_than ?? data.slower_than ?? data['slowlog-log-slower-than'],
+      max_len: data.slowlog_max_len ?? data.max_len ?? data['slowlog-max-len']
     }
   } catch (e) {
     console.error('loadRedisSlowlogConfig error', e)

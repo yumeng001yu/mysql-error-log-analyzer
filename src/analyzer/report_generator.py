@@ -515,14 +515,15 @@ class ReportGenerator:
         ))
 
         # 6. 健康评分
+        alert_stats = await self._get_alert_stats(db, instance_id, period_start, period_end)
         health_score = self._calculate_health_score(
             total_errors, total_warnings, alerts_fired,
-            await self._get_alert_stats(db, instance_id, period_start, period_end),
+            alert_stats,
             slow_queries,
         )
         health_breakdown = self._get_health_breakdown(
             total_errors, total_warnings, alerts_fired,
-            await self._get_alert_stats(db, instance_id, period_start, period_end),
+            alert_stats,
             slow_queries,
         )
         sections.append(ReportSection(

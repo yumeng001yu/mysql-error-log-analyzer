@@ -21,7 +21,7 @@
         <!-- 非集群模式提示 -->
         <div v-if="!clusterInfo.is_cluster" class="info-message">
           <span class="info-icon">ℹ️</span>
-          <span>当前实例不是集群模式</span>
+          <span>{{ clusterInfo.message || '当前实例不是集群模式' }}</span>
         </div>
 
         <!-- 集群模式详情 -->
@@ -125,7 +125,7 @@
         <!-- 非哨兵模式提示 -->
         <div v-if="!sentinelInfo.is_sentinel" class="info-message">
           <span class="info-icon">ℹ️</span>
-          <span>当前实例不是 Sentinel 模式</span>
+          <span>{{ sentinelInfo.message || '当前实例不是 Sentinel 模式' }}</span>
         </div>
 
         <!-- 哨兵模式详情 -->
@@ -264,6 +264,8 @@ async function loadClusterInfo() {
     const data = res.data || {}
     clusterInfo.value = {
       is_cluster: data.is_cluster || data.cluster_state !== undefined,
+      mode: data.mode,
+      message: data.message,
       cluster_state: data.cluster_state,
       cluster_slots_ok: data.cluster_slots_ok,
       cluster_slots_assigned: data.cluster_slots_assigned,
@@ -306,14 +308,14 @@ async function loadSentinelMasters() {
     const data = res.data || {}
     // 判断是否为哨兵模式
     if (data.is_sentinel !== undefined) {
-      sentinelInfo.value = { is_sentinel: data.is_sentinel }
+      sentinelInfo.value = { is_sentinel: data.is_sentinel, mode: data.mode, message: data.message }
       sentinelMasters.value = data.masters || data.items || []
     } else if (Array.isArray(data)) {
       // 如果返回的是数组，说明是哨兵模式
       sentinelInfo.value = { is_sentinel: true }
       sentinelMasters.value = data
     } else {
-      sentinelInfo.value = { is_sentinel: data.is_sentinel || false }
+      sentinelInfo.value = { is_sentinel: data.is_sentinel || false, mode: data.mode, message: data.message }
       sentinelMasters.value = data.masters || data.items || []
     }
     sentinelLoaded.value = true

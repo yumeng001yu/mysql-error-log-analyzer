@@ -156,6 +156,7 @@
 <script setup>
 import { ref, computed, onMounted, onUnmounted } from 'vue'
 import { api } from '../api.js'
+import { formatPercent } from '../utils/format.js'
 
 const connected = ref(false)
 const status = ref({})
@@ -217,13 +218,6 @@ function formatUptime(seconds) {
   if (d > 0) return `${d}天${h}小时`
   if (h > 0) return `${h}小时${m}分`
   return `${m}分钟`
-}
-
-function formatPercent(val) {
-  if (val == null) return '-'
-  const num = Number(val)
-  if (isNaN(num)) return '-'
-  return num.toFixed(1) + '%'
 }
 
 function truncateInfo(info) {

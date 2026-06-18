@@ -161,6 +161,7 @@
 import { ref, computed, onMounted, onUnmounted } from 'vue'
 import { useRoute } from 'vue-router'
 import { api } from '../api.js'
+import { formatPercent, formatBytes } from '../utils/format.js'
 
 const route = useRoute()
 const instanceId = ref(route.query.instance_id || '')
@@ -182,14 +183,6 @@ const eviction = ref({})
 const luaMemory = ref({})
 
 let refreshTimer = null
-
-// 格式化百分比
-function formatPercent(val) {
-  if (val == null) return '-'
-  const num = Number(val)
-  if (isNaN(num)) return '-'
-  return num.toFixed(1) + '%'
-}
 
 // 内存使用率样式
 function getUsageClass(percent) {
@@ -253,58 +246,61 @@ async function loadMemory() {
     const data = res.data || {}
     rawData.value = data
 
+    // API 返回嵌套结构：{ overview, fragmentation, composition, eviction, lua }
+    // 同时兼容扁平结构
+    const overviewData = data.overview || {}
+    const fragData = data.fragmentation || {}
+    const compData = data.composition || {}
+    const evictData = data.eviction || {}
+    const luaData = data.lua || {}
+
     // 概览
+    const maxmemoryHuman = (overviewData.maxmemory_human || data.maxmemory_human)
+      || ((overviewData.maxmemory && Number(overviewData.maxmemory) > 0) ? formatBytes(overviewData.maxmemory) : '')
+      || ((data.maxmemory && Number(data.maxmemory) > 0) ? formatBytes(data.maxmemory) : '')
+      || '无限制'
     overview.value = {
-      used_memory_human: data.used_memory_human,
-      used_memory_peak_human: data.used_memory_peak_human,
-      maxmemory_human: data.maxmemory_human || (data.maxmemory && Number(data.maxmemory) > 0 ? formatBytes(data.maxmemory) : ''),
-      usage_percent: data.usage_percent ?? data.memory_usage_percent
+      used_memory_human: overviewData.used_memory_human ?? data.used_memory_human,
+      used_memory_peak_human: overviewData.used_memory_peak_human ?? data.used_memory_peak_human,
+      maxmemory_human: maxmemoryHuman,
+      usage_percent: overviewData.usage_percent ?? data.usage_percent ?? data.memory_usage_percent
     }
 
     // 碎片率
     fragmentation.value = {
-      ratio: data.mem_fragmentation_ratio ?? data.fragmentation_ratio,
-      bytes: data.mem_fragmentation_bytes ?? data.fragmentation_bytes,
-      bytes_human: data.mem_fragmentation_bytes_human ?? data.fragmentation_bytes_human,
-      status: data.fragmentation_status,
-      recommendation: data.fragmentation_recommendation
+      ratio: fragData.ratio ?? fragData.fragmentation_ratio ?? data.mem_fragmentation_ratio ?? data.fragmentation_ratio,
+      bytes: fragData.bytes ?? fragData.fragmentation_bytes ?? data.mem_fragmentation_bytes ?? data.fragmentation_bytes,
+      bytes_human: fragData.bytes_human ?? fragData.fragmentation_bytes_human ?? data.mem_fragmentation_bytes_human ?? data.fragmentation_bytes_human,
+      status: fragData.status ?? data.fragmentation_status,
+      recommendation: fragData.recommendation ?? data.fragmentation_recommendation
     }
 
     // 内存组成
     composition.value = {
-      dataset_percent: data.dataset_percent ?? 0,
-      overhead_percent: data.overhead_percent ?? 0,
-      startup_percent: data.startup_percent ?? 0
+      dataset_percent: compData.dataset_percent ?? data.dataset_percent ?? 0,
+      overhead_percent: compData.overhead_percent ?? data.overhead_percent ?? 0,
+      startup_percent: compData.startup_percent ?? data.startup_percent ?? 0
     }
 
     // 淘汰信息
     eviction.value = {
-      policy: data.maxmemory_policy ?? data.eviction_policy,
-      policy_desc: data.maxmemory_policy_desc ?? data.eviction_policy_desc,
-      evicted_keys: data.evicted_keys,
-      expired_keys: data.expired_keys
+      policy: evictData.policy ?? evictData.maxmemory_policy ?? data.maxmemory_policy ?? data.eviction_policy,
+      policy_desc: evictData.policy_desc ?? evictData.maxmemory_policy_desc ?? data.maxmemory_policy_desc ?? data.eviction_policy_desc,
+      evicted_keys: evictData.evicted_keys ?? data.evicted_keys,
+      expired_keys: evictData.expired_keys ?? data.expired_keys
     }
 
     // Lua 内存
     luaMemory.value = {
-      used_memory: data.lua_memory ?? data.used_memory_lua,
-      used_memory_human: data.lua_memory_human ?? data.used_memory_lua_human,
-      used_memory_bytes: data.lua_memory_bytes ?? data.used_memory_lua_bytes
+      used_memory: luaData.used_memory ?? luaData.used_memory_lua ?? data.lua_memory ?? data.used_memory_lua,
+      used_memory_human: luaData.used_memory_human ?? luaData.used_memory_lua_human ?? data.lua_memory_human ?? data.used_memory_lua_human,
+      used_memory_bytes: luaData.used_memory_bytes ?? luaData.used_memory_lua_bytes ?? data.lua_memory_bytes ?? data.used_memory_lua_bytes
     }
 
     error.value = ''
   } catch (e) {
     error.value = '无法获取 Redis 内存数据: ' + (e.response?.data?.detail || e.message || '未知错误')
   }
-}
-
-// 格式化字节数
-function formatBytes(bytes) {
-  const num = Number(bytes)
-  if (isNaN(num) || num === 0) return '0B'
-  const units = ['B', 'KB', 'MB', 'GB', 'TB']
-  const i = Math.floor(Math.log(num) / Math.log(1024))
-  return (num / Math.pow(1024, i)).toFixed(2) + units[i]
 }
 
 // 加载全部

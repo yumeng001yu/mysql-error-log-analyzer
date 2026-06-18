@@ -293,20 +293,12 @@
 <script setup>
 import { ref, computed, watch, onMounted } from 'vue'
 import { api } from '../api.js'
+import { useMessage } from '../composables/useMessage.js'
+import { truncate as truncateText } from '../utils/format.js'
 
 // ==================== 通用 ====================
 
-const message = ref({ text: '', type: '' })
-
-function showMessage(text, type = 'success') {
-  message.value = { text, type }
-  setTimeout(() => { message.value = { text: '', type: '' } }, 3000)
-}
-
-function truncateText(str, len) {
-  if (!str) return ''
-  return str.length > len ? str.substring(0, len) + '...' : str
-}
+const { message, showMessage } = useMessage()
 
 function severityLabel(severity) {
   const map = { critical: 'Critical', high: 'High', medium: 'Medium', low: 'Low' }

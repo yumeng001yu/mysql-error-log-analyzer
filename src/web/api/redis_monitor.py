@@ -16,53 +16,10 @@ from typing import Optional
 from fastapi import APIRouter, Query
 
 from src.collector.redis_connector import RedisConnector
+from src.web.api.deps import get_redis_connector as _get_connector
 
 logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/api/redis", tags=["Redis 监控"])
-
-
-def _get_connector(instance_id: Optional[int] = None) -> Optional[RedisConnector]:
-    """根据 instance_id 获取 Redis 连接器"""
-    if instance_id is not None:
-        connector = RedisConnector.get_instance_connection(instance_id)
-        if connector:
-            return connector
-
-    # 默认：尝试从数据库找第一个 Redis 实例
-    try:
-        import sqlite3
-        import json as _json
-        from src.config import Config
-        config = Config()
-        db_path = config.get("storage", "db_path", default="./data/logs.db")
-        conn = sqlite3.connect(db_path)
-        conn.row_factory = sqlite3.Row
-        cursor = conn.execute(
-            "SELECT id, host, port, credentials FROM instances WHERE db_type = 'redis' AND credentials IS NOT NULL ORDER BY id DESC LIMIT 1"
-        )
-        row = cursor.fetchone()
-        conn.close()
-        if row:
-            password, username, ssl = None, None, False
-            try:
-                creds = _json.loads(row['credentials'])
-                password = creds.get('password')
-                username = creds.get('username')
-                ssl = creds.get('ssl', False)
-            except (_json.JSONDecodeError, TypeError):
-                pass
-            return RedisConnector(
-                host=row['host'] or 'localhost',
-                port=row['port'] or 6379,
-                password=password,
-                username=username,
-                ssl=ssl,
-            )
-    except Exception:
-        pass
-
-    # 最终兜底
-    return RedisConnector()
 
 
 @router.get("/status")

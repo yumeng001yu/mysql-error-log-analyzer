@@ -236,6 +236,7 @@
 <script setup>
 import { ref, computed, onMounted } from 'vue'
 import { api } from '../api.js'
+import { formatTimeShortWithSeconds as formatTime } from '../utils/datetime.js'
 
 // 状态
 const building = ref(false)
@@ -314,18 +315,6 @@ function formatValue(val) {
   if (Math.abs(num) >= 1e6) return num.toExponential(2)
   if (Math.abs(num) < 0.01 && num !== 0) return num.toExponential(2)
   return num.toFixed(2)
-}
-
-function formatTime(t) {
-  if (!t) return '-'
-  const d = new Date(t)
-  if (isNaN(d.getTime())) return '-'
-  const month = d.getMonth() + 1
-  const day = d.getDate()
-  const hour = String(d.getHours()).padStart(2, '0')
-  const min = String(d.getMinutes()).padStart(2, '0')
-  const sec = String(d.getSeconds()).padStart(2, '0')
-  return `${month}/${day} ${hour}:${min}:${sec}`
 }
 
 function getDeviationClass(deviation) {

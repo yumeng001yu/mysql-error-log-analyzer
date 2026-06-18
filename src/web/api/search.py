@@ -9,22 +9,9 @@ from typing import Optional
 
 from fastapi import APIRouter, Query
 
-from src.storage.database import DatabaseManager
+from src.web.api.deps import get_db as _get_db
 
 router = APIRouter(prefix="/api/search", tags=["search"])
-
-
-# ── 数据库实例 ──────────────────────────────────────────────
-
-_db: DatabaseManager | None = None
-
-
-def _get_db() -> DatabaseManager:
-    """获取数据库管理器单例"""
-    global _db
-    if _db is None:
-        _db = DatabaseManager()
-    return _db
 
 
 # ── MySQL 常见错误模式（用于搜索建议）──────────────────────────

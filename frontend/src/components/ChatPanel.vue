@@ -14,7 +14,7 @@
     <div class="message-list" ref="messageListRef">
       <div v-if="messages.length === 0" class="empty-chat">
         <div class="empty-icon">💬</div>
-        <p>向 AI 助手提问关于 MySQL 错误日志的问题</p>
+        <p>向 AI 助手提问关于 {{ dbType === 'redis' ? 'Redis 运维' : 'MySQL 错误日志' }}的问题</p>
       </div>
       <div
         v-for="(msg, idx) in messages"
@@ -57,34 +57,44 @@
 <script>
 import { ref, nextTick, onMounted } from 'vue'
 import { api } from '../api.js'
-import { marked } from 'marked'
+import { renderMarkdown } from '../utils/markdown.js'
 
 export default {
   name: 'ChatPanel',
-  setup() {
+  props: {
+    dbType: {
+      type: String,
+      default: 'mysql',
+      validator: (v) => ['mysql', 'redis'].includes(v)
+    }
+  },
+  setup(props) {
     const messages = ref([])
     const inputText = ref('')
     const loading = ref(false)
     const messageListRef = ref(null)
     const inputRef = ref(null)
 
-    const quickActions = [
-      { label: '📊 分析最近1小时', text: '分析最近1小时的错误日志' },
-      { label: '📊 分析最近3小时', text: '分析最近3小时的错误日志' },
-      { label: '📊 分析最近24小时', text: '分析最近24小时的错误日志' },
-      { label: '🔒 查看死锁信息', text: '查看最近的死锁信息' },
-      { label: '⚠️ 关键告警', text: '当前有哪些关键告警？' },
-      { label: '💡 修复建议', text: '给出最近的错误修复建议' }
-    ]
-
-    function renderMarkdown(text) {
-      if (!text) return ''
-      try {
-        return marked.parse(text)
-      } catch {
-        return text.replace(/\n/g, '<br>')
-      }
+    // 按 dbType 索引的快捷操作配置
+    const quickActionsMap = {
+      mysql: [
+        { label: '📊 分析最近1小时', text: '分析最近1小时的错误日志' },
+        { label: '📊 分析最近3小时', text: '分析最近3小时的错误日志' },
+        { label: '📊 分析最近24小时', text: '分析最近24小时的错误日志' },
+        { label: '🔒 查看死锁信息', text: '查看最近的死锁信息' },
+        { label: '⚠️ 关键告警', text: '当前有哪些关键告警？' },
+        { label: '💡 修复建议', text: '给出最近的错误修复建议' }
+      ],
+      redis: [
+        { label: '📊 内存使用情况', text: '分析当前 Redis 内存使用情况' },
+        { label: '🐢 慢查询分析', text: '分析 Redis 慢查询情况' },
+        { label: '💾 碎片率分析', text: 'Redis 内存碎片率如何？需要优化吗？' },
+        { label: '🔑 Key 分析', text: '分析 Redis Key 的分布情况' },
+        { label: '💿 持久化状态', text: 'Redis 持久化配置是否合理？' },
+        { label: '⚠️ 性能建议', text: '给出 Redis 性能优化建议' }
+      ]
     }
+    const quickActions = quickActionsMap[props.dbType] || quickActionsMap.mysql
 
     function scrollToBottom() {
       nextTick(() => {
@@ -104,7 +114,8 @@ export default {
       scrollToBottom()
 
       try {
-        const res = await api.sendChat({ message: text, history: messages.value.slice(-10) })
+        const sendFn = props.dbType === 'redis' ? api.sendRedisChat : api.sendChat
+        const res = await sendFn({ message: text, history: messages.value.slice(-10) })
         const reply = res.data?.response || res.data?.content || res.data?.message || (typeof res.data === 'string' ? res.data : '未获取到回复')
         messages.value.push({ role: 'assistant', content: reply })
       } catch (e) {

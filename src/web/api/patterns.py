@@ -6,8 +6,8 @@ from typing import Optional
 from fastapi import APIRouter, Query
 
 from src.analyzer.pattern_recognizer import PatternRecognizer
-from src.storage.database import DatabaseManager
 from src.web.api.auth import get_current_user
+from src.web.api.deps import get_db as _get_db
 
 logger = logging.getLogger(__name__)
 
@@ -15,16 +15,7 @@ router = APIRouter(prefix="/api/patterns", tags=["patterns"])
 
 # ── 全局实例 ──────────────────────────────────────────────
 
-_db: DatabaseManager | None = None
 _recognizer: PatternRecognizer | None = None
-
-
-def _get_db() -> DatabaseManager:
-    """获取数据库管理器单例"""
-    global _db
-    if _db is None:
-        _db = DatabaseManager()
-    return _db
 
 
 def _get_recognizer() -> PatternRecognizer:

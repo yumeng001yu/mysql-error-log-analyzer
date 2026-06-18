@@ -10,7 +10,7 @@ from typing import Any, Optional
 from fastapi import APIRouter, Body, HTTPException, Query
 from pydantic import BaseModel
 
-from src.storage.database import DatabaseManager
+from src.web.api.deps import get_db as _get_db
 
 logger = logging.getLogger(__name__)
 
@@ -54,18 +54,8 @@ class UpdateGroupRequest(BaseModel):
 
 # ── 数据库实例 ──────────────────────────────────────────────
 
-_db: DatabaseManager | None = None
-
 # 标记是否已完成列迁移
 _migrated: bool = False
-
-
-def _get_db() -> DatabaseManager:
-    """获取数据库管理器实例"""
-    global _db
-    if _db is None:
-        _db = DatabaseManager()
-    return _db
 
 
 async def _ensure_columns():
@@ -157,38 +147,36 @@ async def list_instances(
     db = _get_db()
     conn = await db._get_conn()
 
+    # 一次查询获取实例及其错误/警告计数，避免 N+1 查询
     if group:
         cursor = await conn.execute(
-            "SELECT * FROM instances WHERE group_name = ? ORDER BY created_at DESC",
+            """
+            SELECT i.*,
+                (SELECT COUNT(*) FROM log_entries
+                 WHERE instance_id = i.id AND level IN ('ERROR', 'FATAL')) AS error_count,
+                (SELECT COUNT(*) FROM log_entries
+                 WHERE instance_id = i.id AND level = 'WARNING') AS warning_count
+            FROM instances i
+            WHERE i.group_name = ?
+            ORDER BY i.created_at DESC
+            """,
             (group,),
         )
     else:
         cursor = await conn.execute(
-            "SELECT * FROM instances ORDER BY created_at DESC"
+            """
+            SELECT i.*,
+                (SELECT COUNT(*) FROM log_entries
+                 WHERE instance_id = i.id AND level IN ('ERROR', 'FATAL')) AS error_count,
+                (SELECT COUNT(*) FROM log_entries
+                 WHERE instance_id = i.id AND level = 'WARNING') AS warning_count
+            FROM instances i
+            ORDER BY i.created_at DESC
+            """
         )
     rows = await cursor.fetchall()
 
-    instances = []
-    for row in rows:
-        item = dict(row)
-        iid = item["id"]
-
-        # 查询该实例的错误和警告计数
-        cursor_err = await conn.execute(
-            "SELECT COUNT(*) as cnt FROM log_entries WHERE instance_id = ? AND level IN ('ERROR', 'FATAL')",
-            (iid,),
-        )
-        err_row = await cursor_err.fetchone()
-        item["error_count"] = err_row["cnt"] if err_row else 0
-
-        cursor_warn = await conn.execute(
-            "SELECT COUNT(*) as cnt FROM log_entries WHERE instance_id = ? AND level = 'WARNING'",
-            (iid,),
-        )
-        warn_row = await cursor_warn.fetchone()
-        item["warning_count"] = warn_row["cnt"] if warn_row else 0
-
-        instances.append(_format_instance(item))
+    instances = [_format_instance(dict(row)) for row in rows]
 
     return instances
 

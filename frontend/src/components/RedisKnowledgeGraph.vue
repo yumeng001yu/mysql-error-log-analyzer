@@ -4,8 +4,6 @@
       <button class="btn-secondary" @click="loadGraph">刷新</button>
       <button class="btn-secondary" @click="resetZoom">重置视图</button>
       <span class="toolbar-hint">拖拽节点 | 滚轮缩放 | 点击查看详情</span>
-      <span class="embedding-status" v-if="embeddingAvailable === false">Embedding 未配置</span>
-      <span class="embedding-status success" v-if="embeddingAvailable === true">语义关联已加载</span>
     </div>
 
     <!-- SVG 力导向图谱 -->
@@ -25,11 +23,11 @@
       >
         <defs>
           <!-- 箭头标记 -->
-          <marker id="arrowhead" markerWidth="8" markerHeight="6" refX="8" refY="3" orient="auto">
+          <marker id="arrowhead-redis" markerWidth="8" markerHeight="6" refX="8" refY="3" orient="auto">
             <polygon points="0 0, 8 3, 0 6" :fill="edgeColor" />
           </marker>
           <!-- 发光效果 -->
-          <filter id="glow">
+          <filter id="glow-redis">
             <feGaussianBlur stdDeviation="3" result="coloredBlur"/>
             <feMerge>
               <feMergeNode in="coloredBlur"/>
@@ -51,7 +49,7 @@
               :stroke="edge.highlight ? edge.source.color : edgeColor"
               :stroke-width="edge.highlight ? 2.5 : 1.2"
               :stroke-opacity="edge.highlight ? 0.9 : 0.35"
-              :marker-end="edge.highlight ? 'url(#arrowhead)' : ''"
+              :marker-end="edge.highlight ? 'url(#arrowhead-redis)' : ''"
             />
           </g>
 
@@ -74,7 +72,7 @@
               :stroke="node.color"
               stroke-width="2"
               stroke-opacity="0.4"
-              filter="url(#glow)"
+              filter="url(#glow-redis)"
             />
             <!-- 节点圆 -->
             <circle
@@ -118,7 +116,7 @@
     <!-- 空状态 -->
     <div v-if="nodes.length === 0 && !loading" class="empty-state">
       <p>暂无图谱数据</p>
-      <p class="hint">请先确保有日志数据，然后点击刷新</p>
+      <p class="hint">请先确保 Redis 实例已连接，然后点击刷新</p>
     </div>
 
     <!-- 加载状态 -->
@@ -139,13 +137,9 @@
           <span class="detail-label">类型</span>
           <span class="detail-value">{{ typeLabels[selectedNode.type] || selectedNode.type }}</span>
         </div>
-        <div class="detail-row" v-if="selectedNode.count">
-          <span class="detail-label">出现次数</span>
-          <span class="detail-value">{{ selectedNode.count }}</span>
-        </div>
-        <div class="detail-row" v-if="selectedNode.description">
-          <span class="detail-label">描述</span>
-          <span class="detail-value">{{ selectedNode.description }}</span>
+        <div class="detail-row" v-if="selectedNode.value !== undefined && selectedNode.value !== null">
+          <span class="detail-label">数值</span>
+          <span class="detail-value">{{ selectedNode.value }}</span>
         </div>
         <div class="detail-row" v-if="selectedNode.suggestion">
           <span class="detail-label">建议</span>
@@ -175,12 +169,11 @@ import { api } from '../api.js'
 import { truncate } from '../utils/format.js'
 
 export default {
-  name: 'KnowledgeGraph',
+  name: 'RedisKnowledgeGraph',
   setup() {
     const svgRef = ref(null)
     const containerRef = ref(null)
     const selectedNode = ref(null)
-    const embeddingAvailable = ref(null)
     const loading = ref(false)
     const nodes = ref([])
     const edges = ref([])
@@ -191,23 +184,25 @@ export default {
     const panY = ref(0)
 
     const typeColors = {
-      center: '#6366f1',
-      level: '#3b82f6',
-      category: '#f59e0b',
-      error_code: '#ef4444',
-      root_cause: '#8b5cf6',
-      suggestion: '#10b981',
-      semantic: '#ec4899'
+      center: '#dc2626',
+      server: '#3b82f6',
+      memory: '#f59e0b',
+      slowlog: '#ef4444',
+      keyspace: '#10b981',
+      persistence: '#8b5cf6',
+      replication: '#06b6d4',
+      client: '#ec4899'
     }
 
     const typeLabels = {
       center: '中心',
-      level: '错误级别',
-      category: '错误类别',
-      error_code: '错误码',
-      root_cause: '根因',
-      suggestion: '修复建议',
-      semantic: '语义关联'
+      server: '服务器',
+      memory: '内存',
+      slowlog: '慢查询',
+      keyspace: '键空间',
+      persistence: '持久化',
+      replication: '复制',
+      client: '客户端'
     }
 
     const edgeColor = '#555'
@@ -245,7 +240,6 @@ export default {
       if (node.count > 50) return 22
       if (node.count > 20) return 18
       if (node.count > 5) return 15
-      if (node.type === 'suggestion') return 13
       return 12
     }
 
@@ -351,7 +345,6 @@ export default {
       node.fixed = true
       dragOffsetX = e.clientX / zoom.value - node.x
       dragOffsetY = e.clientY / zoom.value - node.y
-      // 重启模拟
       if (!simRunning) { simAlpha = 0.3; simRunning = true; tick() }
     }
 
@@ -437,13 +430,6 @@ export default {
       loading.value = true
       stopSimulation()
       try {
-        const distRes = await api.getLogDistribution({ period: '7d' })
-        const distData = distRes.data || {}
-
-        const byLevel = distData.by_level || []
-        const byCategory = distData.by_category || []
-        const byErrorCode = distData.by_error_code || []
-
         const cx = svgWidth.value / 2
         const cy = svgHeight.value / 2
         const newNodes = []
@@ -452,76 +438,342 @@ export default {
 
         // 中心节点
         const centerNode = {
-          id: 'center', name: 'MySQL 错误', type: 'center',
+          id: 'center', name: 'Redis 运维', type: 'center',
           color: typeColors.center, x: cx, y: cy, vx: 0, vy: 0, fixed: false, count: 0
         }
         newNodes.push(centerNode)
 
-        // 级别节点
-        byLevel.forEach((item, i) => {
-          const angle = (2 * Math.PI * i) / Math.max(byLevel.length, 1) - Math.PI / 2
-          const r = 160
-          const node = {
-            id: 'level_' + item.level, name: item.level, type: 'level',
-            color: typeColors.level, count: item.count,
-            x: cx + Math.cos(angle) * r, y: cy + Math.sin(angle) * r,
-            vx: 0, vy: 0, fixed: false
-          }
-          newNodes.push(node)
-          newEdges.push({ id: 'e_' + edgeIdx++, source: centerNode, target: node, highlight: false })
-        })
+        // 并行请求数据
+        const [statusRes, memoryRes, slowlogRes, keyspaceRes] = await Promise.allSettled([
+          api.getRedisStatus(),
+          api.getRedisMemory(),
+          api.getRedisSlowlogStats(),
+          api.getRedisKeyspace()
+        ])
 
-        // 类别节点
-        byCategory.forEach((item, i) => {
-          const angle = (2 * Math.PI * i) / Math.max(byCategory.length, 1)
-          const r = 260
-          const node = {
-            id: 'cat_' + item.category, name: item.category, type: 'category',
-            color: typeColors.category, count: item.count,
-            x: cx + Math.cos(angle) * r, y: cy + Math.sin(angle) * r,
-            vx: 0, vy: 0, fixed: false
-          }
-          newNodes.push(node)
-          newEdges.push({ id: 'e_' + edgeIdx++, source: centerNode, target: node, highlight: false })
-        })
+        const statusData = statusRes.status === 'fulfilled' ? (statusRes.value.data || {}) : {}
+        const memoryData = memoryRes.status === 'fulfilled' ? (memoryRes.value.data || {}) : {}
+        const slowlogData = slowlogRes.status === 'fulfilled' ? (slowlogRes.value.data || {}) : {}
+        const keyspaceData = keyspaceRes.status === 'fulfilled' ? (keyspaceRes.value.data || {}) : {}
 
-        // 错误码节点 - 连接到对应类别
-        const catNodeMap = {}
-        newNodes.forEach(n => { if (n.type === 'category') catNodeMap[n.name] = n })
+        let nodeIdx = 0
+        const typeAngles = {
+          server: -Math.PI / 2,
+          memory: -Math.PI / 6,
+          slowlog: Math.PI / 6,
+          keyspace: Math.PI / 2,
+          persistence: 5 * Math.PI / 6,
+          replication: 7 * Math.PI / 6,
+          client: -5 * Math.PI / 6
+        }
+        const typeRadius = 180
 
-        byErrorCode.slice(0, 20).forEach((item, i) => {
-          const angle = (2 * Math.PI * i) / Math.max(Math.min(byErrorCode.length, 20), 1) + 0.5
-          const r = 340
-          const node = {
-            id: 'code_' + item.error_code, name: item.error_code, type: 'error_code',
-            color: typeColors.error_code, count: item.count,
-            x: cx + Math.cos(angle) * r, y: cy + Math.sin(angle) * r,
-            vx: 0, vy: 0, fixed: false
-          }
-          newNodes.push(node)
-          // 连接到中心
-          newEdges.push({ id: 'e_' + edgeIdx++, source: centerNode, target: node, highlight: false })
-        })
+        // ── server 节点 ──────────────────────────────────
+        const serverInfo = statusData.server || statusData.Server || {}
+        const serverItems = []
 
-        // 建议节点
-        try {
-          const analysisRes = await api.getAnalysisResults()
-          const analysisData = analysisRes.data || {}
-          const suggestions = analysisData.suggestions || []
-          suggestions.slice(0, 8).forEach((s, i) => {
-            const angle = (2 * Math.PI * i) / Math.max(Math.min(suggestions.length, 8), 1) + Math.PI
-            const r = 200
-            const node = {
-              id: 'sug_' + i, name: (s.suggestion || s.category || '').substring(0, 20),
-              type: 'suggestion', color: typeColors.suggestion,
-              suggestion: s.suggestion, description: s.description,
-              x: cx + Math.cos(angle) * r, y: cy + Math.sin(angle) * r,
-              vx: 0, vy: 0, fixed: false
-            }
-            newNodes.push(node)
-            newEdges.push({ id: 'e_' + edgeIdx++, source: centerNode, target: node, highlight: false })
+        if (serverInfo.redis_version || serverInfo.version) {
+          serverItems.push({
+            name: '版本 ' + (serverInfo.redis_version || serverInfo.version),
+            value: serverInfo.redis_version || serverInfo.version,
+            suggestion: '建议使用 Redis 6.0+ 以获得更好的性能和安全性'
           })
-        } catch { /* ignore */ }
+        }
+        if (serverInfo.redis_mode || serverInfo.mode) {
+          serverItems.push({
+            name: '模式 ' + (serverInfo.redis_mode || serverInfo.mode),
+            value: serverInfo.redis_mode || serverInfo.mode,
+            suggestion: 'Cluster 模式支持水平扩展，Standalone 适合小规模场景'
+          })
+        }
+        if (serverInfo.uptime_in_seconds || serverInfo.uptime) {
+          const uptime = parseInt(serverInfo.uptime_in_seconds || serverInfo.uptime)
+          const days = Math.floor(uptime / 86400)
+          serverItems.push({
+            name: '运行 ' + days + ' 天',
+            value: days + ' 天 (' + uptime + ' 秒)',
+            suggestion: days < 1 ? 'Redis 刚重启，请关注是否有异常崩溃' : '运行稳定'
+          })
+        }
+
+        serverItems.forEach((item, i) => {
+          const angle = typeAngles.server + (i - (serverItems.length - 1) / 2) * 0.3
+          const r = typeRadius
+          const node = {
+            id: 'server_' + nodeIdx++, name: item.name, type: 'server',
+            color: typeColors.server, value: item.value, suggestion: item.suggestion,
+            x: cx + Math.cos(angle) * r, y: cy + Math.sin(angle) * r,
+            vx: 0, vy: 0, fixed: false
+          }
+          newNodes.push(node)
+          newEdges.push({ id: 'e_' + edgeIdx++, source: centerNode, target: node, highlight: false })
+        })
+
+        // ── memory 节点 ──────────────────────────────────
+        const memItems = []
+
+        const usedMemory = memoryData.used_memory_human || memoryData.used_memory
+        if (usedMemory) {
+          const usedBytes = memoryData.used_memory || 0
+          const maxMemory = memoryData.maxmemory || 0
+          let suggestion = '关注内存使用趋势'
+          if (maxMemory > 0) {
+            const usagePercent = ((usedBytes / maxMemory) * 100).toFixed(1)
+            if (parseFloat(usagePercent) > 80) {
+              suggestion = '内存使用率 ' + usagePercent + '%，建议扩容或优化淘汰策略'
+            } else {
+              suggestion = '内存使用率 ' + usagePercent + '%，状态正常'
+            }
+          }
+          memItems.push({
+            name: '使用 ' + (memoryData.used_memory_human || usedMemory),
+            value: memoryData.used_memory_human || usedMemory,
+            suggestion
+          })
+        }
+
+        const fragRatio = memoryData.mem_fragmentation_ratio || memoryData.fragmentation_ratio
+        if (fragRatio) {
+          const ratio = parseFloat(fragRatio)
+          let suggestion = '碎片率正常'
+          if (ratio > 1.5) {
+            suggestion = '碎片率过高 (' + ratio + ')，建议开启 activedefrag 或重启 Redis'
+          } else if (ratio < 1.0) {
+            suggestion = '碎片率低于 1.0，可能存在 swap 风险'
+          }
+          memItems.push({
+            name: '碎片率 ' + fragRatio,
+            value: fragRatio,
+            suggestion
+          })
+        }
+
+        const evictionPolicy = memoryData.maxmemory_policy || memoryData.eviction_policy
+        if (evictionPolicy) {
+          memItems.push({
+            name: '淘汰 ' + evictionPolicy,
+            value: evictionPolicy,
+            suggestion: evictionPolicy === 'noeviction' ? '无淘汰策略，内存满时写入会报错' : '当前淘汰策略: ' + evictionPolicy
+          })
+        }
+
+        memItems.forEach((item, i) => {
+          const angle = typeAngles.memory + (i - (memItems.length - 1) / 2) * 0.3
+          const r = typeRadius
+          const node = {
+            id: 'memory_' + nodeIdx++, name: item.name, type: 'memory',
+            color: typeColors.memory, value: item.value, suggestion: item.suggestion,
+            x: cx + Math.cos(angle) * r, y: cy + Math.sin(angle) * r,
+            vx: 0, vy: 0, fixed: false
+          }
+          newNodes.push(node)
+          newEdges.push({ id: 'e_' + edgeIdx++, source: centerNode, target: node, highlight: false })
+        })
+
+        // ── slowlog 节点 ──────────────────────────────────
+        const slowlogItems = []
+        const commandDist = slowlogData.command_distribution || slowlogData.by_command || slowlogData.commands || []
+        const topCommands = Array.isArray(commandDist) ? commandDist.slice(0, 5) : []
+
+        topCommands.forEach(item => {
+          const cmd = item.command || item.name || item.cmd
+          const cnt = item.count || item.total || 0
+          if (cmd) {
+            slowlogItems.push({
+              name: cmd,
+              value: cnt + ' 次',
+              count: cnt,
+              suggestion: '频繁执行的慢命令，建议优化或拆分'
+            })
+          }
+        })
+
+        // Top 慢查询
+        const topSlow = slowlogData.top_slow || slowlogData.top || []
+        if (Array.isArray(topSlow) && topSlow.length > 0) {
+          topSlow.slice(0, 3).forEach((item, i) => {
+            const duration = item.duration || item.time || item.elapsed
+            const cmd = item.command || item.cmd || ''
+            if (duration || cmd) {
+              slowlogItems.push({
+                name: 'Top' + (i + 1) + ' ' + (cmd || '').substring(0, 8),
+                value: duration ? duration + ' μs' : cmd,
+                suggestion: '耗时较长，建议检查是否可以使用更高效的命令替代'
+              })
+            }
+          })
+        }
+
+        slowlogItems.forEach((item, i) => {
+          const angle = typeAngles.slowlog + (i - (slowlogItems.length - 1) / 2) * 0.25
+          const r = typeRadius + 40
+          const node = {
+            id: 'slowlog_' + nodeIdx++, name: item.name, type: 'slowlog',
+            color: typeColors.slowlog, value: item.value, count: item.count,
+            suggestion: item.suggestion,
+            x: cx + Math.cos(angle) * r, y: cy + Math.sin(angle) * r,
+            vx: 0, vy: 0, fixed: false
+          }
+          newNodes.push(node)
+          newEdges.push({ id: 'e_' + edgeIdx++, source: centerNode, target: node, highlight: false })
+        })
+
+        // ── keyspace 节点 ──────────────────────────────────
+        const keyspaceItems = []
+        const dbs = keyspaceData.databases || keyspaceData.db || keyspaceData
+
+        if (Array.isArray(dbs)) {
+          dbs.forEach(item => {
+            const dbName = item.db || item.name || ''
+            const keys = item.keys || item.key_count || 0
+            if (dbName) {
+              keyspaceItems.push({
+                name: dbName,
+                value: keys + ' keys',
+                count: keys,
+                suggestion: keys > 1000000 ? 'Key 数量超过百万，建议关注过期策略和内存使用' : 'Key 数量正常'
+              })
+            }
+          })
+        } else if (typeof dbs === 'object') {
+          Object.keys(dbs).forEach(dbName => {
+            const dbInfo = dbs[dbName]
+            const keys = dbInfo.keys || (typeof dbInfo === 'string' ? dbInfo : 0)
+            keyspaceItems.push({
+              name: dbName,
+              value: keys + ' keys',
+              count: typeof keys === 'number' ? keys : 0,
+              suggestion: '关注该 DB 的 Key 增长趋势'
+            })
+          })
+        }
+
+        keyspaceItems.forEach((item, i) => {
+          const angle = typeAngles.keyspace + (i - (keyspaceItems.length - 1) / 2) * 0.3
+          const r = typeRadius
+          const node = {
+            id: 'keyspace_' + nodeIdx++, name: item.name, type: 'keyspace',
+            color: typeColors.keyspace, value: item.value, count: item.count,
+            suggestion: item.suggestion,
+            x: cx + Math.cos(angle) * r, y: cy + Math.sin(angle) * r,
+            vx: 0, vy: 0, fixed: false
+          }
+          newNodes.push(node)
+          newEdges.push({ id: 'e_' + edgeIdx++, source: centerNode, target: node, highlight: false })
+        })
+
+        // ── persistence 节点 ──────────────────────────────
+        const persistenceInfo = statusData.persistence || statusData.Persistence || {}
+        const persistenceItems = []
+
+        const rdbStatus = persistenceInfo.rdb_last_bgsave_status || persistenceInfo.rdb_status
+        if (rdbStatus) {
+          persistenceItems.push({
+            name: 'RDB ' + rdbStatus,
+            value: rdbStatus,
+            suggestion: rdbStatus === 'ok' ? 'RDB 快照正常' : 'RDB 快照异常，请检查磁盘空间和权限'
+          })
+        }
+
+        const aofEnabled = persistenceInfo.aof_enabled || persistenceInfo.aof_status
+        if (aofEnabled !== undefined) {
+          const aofVal = aofEnabled === 1 || aofEnabled === '1' || aofEnabled === true || aofEnabled === 'ok'
+          persistenceItems.push({
+            name: 'AOF ' + (aofVal ? '已开启' : '未开启'),
+            value: aofVal ? 'enabled' : 'disabled',
+            suggestion: aofVal ? 'AOF 持久化已开启，数据安全性较高' : '建议开启 AOF 以提高数据持久性保障'
+          })
+        }
+
+        persistenceItems.forEach((item, i) => {
+          const angle = typeAngles.persistence + (i - (persistenceItems.length - 1) / 2) * 0.3
+          const r = typeRadius
+          const node = {
+            id: 'persistence_' + nodeIdx++, name: item.name, type: 'persistence',
+            color: typeColors.persistence, value: item.value, suggestion: item.suggestion,
+            x: cx + Math.cos(angle) * r, y: cy + Math.sin(angle) * r,
+            vx: 0, vy: 0, fixed: false
+          }
+          newNodes.push(node)
+          newEdges.push({ id: 'e_' + edgeIdx++, source: centerNode, target: node, highlight: false })
+        })
+
+        // ── replication 节点 ──────────────────────────────
+        const replicationInfo = statusData.replication || statusData.Replication || {}
+        const replicationItems = []
+
+        const role = replicationInfo.role
+        if (role) {
+          replicationItems.push({
+            name: '角色 ' + role,
+            value: role,
+            suggestion: role === 'master' ? '当前为主节点，关注从节点同步状态' : '当前为从节点，关注与主节点的连接状态'
+          })
+        }
+
+        const connectedSlaves = replicationInfo.connected_slaves
+        if (connectedSlaves !== undefined) {
+          const slaveCount = parseInt(connectedSlaves)
+          replicationItems.push({
+            name: '从节点 ' + slaveCount,
+            value: slaveCount + ' 个',
+            suggestion: slaveCount === 0 ? '无从节点连接，如需高可用请配置从节点' : '从节点连接正常'
+          })
+        }
+
+        replicationItems.forEach((item, i) => {
+          const angle = typeAngles.replication + (i - (replicationItems.length - 1) / 2) * 0.3
+          const r = typeRadius
+          const node = {
+            id: 'replication_' + nodeIdx++, name: item.name, type: 'replication',
+            color: typeColors.replication, value: item.value, suggestion: item.suggestion,
+            x: cx + Math.cos(angle) * r, y: cy + Math.sin(angle) * r,
+            vx: 0, vy: 0, fixed: false
+          }
+          newNodes.push(node)
+          newEdges.push({ id: 'e_' + edgeIdx++, source: centerNode, target: node, highlight: false })
+        })
+
+        // ── client 节点 ──────────────────────────────────
+        const clientsInfo = statusData.clients || statusData.Clients || {}
+        const clientItems = []
+
+        const connectedClients = clientsInfo.connected_clients || clientsInfo.count
+        if (connectedClients !== undefined) {
+          const count = parseInt(connectedClients)
+          let suggestion = '客户端连接数正常'
+          if (count > 500) {
+            suggestion = '连接数较多 (' + count + ')，建议检查是否有连接泄漏'
+          }
+          clientItems.push({
+            name: '连接 ' + count,
+            value: count + ' 个',
+            suggestion
+          })
+        }
+
+        const blockedClients = clientsInfo.blocked_clients || clientsInfo.blocked
+        if (blockedClients !== undefined) {
+          const count = parseInt(blockedClients)
+          clientItems.push({
+            name: '阻塞 ' + count,
+            value: count + ' 个',
+            suggestion: count > 0 ? '存在阻塞客户端，可能是 BLPOP/BRPOP 等阻塞命令导致，或存在性能瓶颈' : '无阻塞客户端'
+          })
+        }
+
+        clientItems.forEach((item, i) => {
+          const angle = typeAngles.client + (i - (clientItems.length - 1) / 2) * 0.3
+          const r = typeRadius
+          const node = {
+            id: 'client_' + nodeIdx++, name: item.name, type: 'client',
+            color: typeColors.client, value: item.value, suggestion: item.suggestion,
+            x: cx + Math.cos(angle) * r, y: cy + Math.sin(angle) * r,
+            vx: 0, vy: 0, fixed: false
+          }
+          newNodes.push(node)
+          newEdges.push({ id: 'e_' + edgeIdx++, source: centerNode, target: node, highlight: false })
+        })
 
         nodes.value = newNodes
         edges.value = newEdges
@@ -556,7 +808,7 @@ export default {
     })
 
     return {
-      svgRef, containerRef, selectedNode, embeddingAvailable, loading,
+      svgRef, containerRef, selectedNode, loading,
       nodes, edges, svgWidth, svgHeight, zoom, panX, panY,
       typeColors, typeLabels, edgeColor, relatedNodes,
       truncate, nodeRadius, selectNode, loadGraph, resetZoom,
@@ -603,19 +855,6 @@ export default {
   font-size: 12px;
   color: var(--text-muted);
   margin-left: auto;
-}
-
-.embedding-status {
-  font-size: 11px;
-  color: var(--accent-yellow, #f59e0b);
-  padding: 2px 8px;
-  background: rgba(245,158,11,0.1);
-  border-radius: 3px;
-}
-
-.embedding-status.success {
-  color: var(--accent-green, #10b981);
-  background: rgba(16,185,129,0.1);
 }
 
 .graph-container {
@@ -709,7 +948,7 @@ export default {
   width: 28px;
   height: 28px;
   border: 3px solid var(--border-color, #333);
-  border-top-color: var(--accent-blue, #3b82f6);
+  border-top-color: #dc2626;
   border-radius: 50%;
   animation: spin 0.8s linear infinite;
 }

@@ -113,6 +113,7 @@
 <script>
 import { ref, reactive, onMounted } from 'vue'
 import { api } from '../api.js'
+import { useMessage } from '../composables/useMessage.js'
 
 export default {
   name: 'SettingsPanel',
@@ -139,15 +140,7 @@ export default {
     const saving = ref(false)
     const testingLLM = ref(false)
     const testingEmbedding = ref(false)
-    const message = reactive({ text: '', type: '' })
-
-    function showMessage(text, type = 'success') {
-      message.text = text
-      message.type = type
-      setTimeout(() => {
-        message.text = ''
-      }, 3000)
-    }
+    const { message, showMessage } = useMessage()
 
     async function loadSettings() {
       try {

@@ -2,24 +2,15 @@
 from fastapi import APIRouter, Query
 from typing import Optional
 
-from src.storage.database import DatabaseManager
 from src.analyzer.baseline import BaselineManager
+from src.web.api.deps import get_db as _get_db
 
 router = APIRouter(prefix="/api/baseline", tags=["baseline"])
 
 
 # ── 数据库与引擎实例 ──────────────────────────────────────
 
-_db: DatabaseManager | None = None
 _manager: BaselineManager | None = None
-
-
-def _get_db() -> DatabaseManager:
-    """获取数据库管理器实例"""
-    global _db
-    if _db is None:
-        _db = DatabaseManager()
-    return _db
 
 
 def _get_manager() -> BaselineManager:

@@ -149,6 +149,8 @@ import { ref, computed, onMounted, onUnmounted } from 'vue'
 import { useRoute } from 'vue-router'
 import LoginPage from './components/LoginPage.vue'
 import { api, wsManager, getToken, setToken, removeToken } from './api.js'
+import { dbToggle } from './router.js'
+import { formatTimeShort as formatTime, formatLogTime } from './utils/datetime.js'
 
 export default {
   name: 'App',
@@ -184,6 +186,17 @@ export default {
 
     // 判断是否在首页
     const isHomePage = computed(() => route.path === '/')
+
+    // 数据库开关状态（响应式）
+    const mysqlEnabled = ref(dbToggle.isEnabled('mysql'))
+    const redisEnabled = ref(dbToggle.isEnabled('redis'))
+
+    // 监听开关变化
+    const _toggleListener = (db, enabled) => {
+      if (db === 'mysql') mysqlEnabled.value = enabled
+      if (db === 'redis') redisEnabled.value = enabled
+    }
+    dbToggle.onChange(_toggleListener)
 
     // MySQL 导航项
     const mysqlNavItems = [
@@ -222,11 +235,25 @@ export default {
       { path: '/redis/keys', icon: '🔑', label: 'Key 分析' },
       { path: '/redis/persistence', icon: '💿', label: '持久化' },
       { path: '/redis/cluster', icon: '🌐', label: '集群/哨兵' },
+      { path: '/redis/graph', icon: '🕸️', label: '知识图谱' },
+      { path: '/redis/chat', icon: '💬', label: '对话' },
+      { path: '/redis/reports', icon: '📊', label: '运维报表' },
+      { path: '/redis/baseline', icon: '📈', label: '性能基线' },
       { path: '/redis/replication', icon: '🔗', label: '复制状态' },
       { path: '/redis/alerts', icon: '🔔', label: '智能告警' },
       { path: '/redis/instances', icon: '🖥️', label: '实例管理' },
       { path: '/redis/settings', icon: '🔧', label: '设置' }
     ]
+
+    // 通用运维功能导航（跨数据库）- 仅在至少一个数据库启用时显示
+    const effectiveCommonNavItems = computed(() => {
+      if (!mysqlEnabled.value && !redisEnabled.value) return []
+      return [
+        { path: '/diagnosis', icon: '🩺', label: '一键诊断' },
+        { path: '/capacity', icon: '📦', label: '容量规划' },
+        { path: '/inspection', icon: '⏰', label: '定时巡检' }
+      ]
+    })
 
     const redisBottomNavItems = [
       { path: '/redis', icon: '💓', label: '监控' },
@@ -236,19 +263,33 @@ export default {
       { path: '/redis/settings', icon: '🔧', label: '设置' }
     ]
 
-    // 根据当前路由动态选择导航项
+    const commonBottomNavItems = [
+      { path: '/diagnosis', icon: '🩺', label: '诊断' },
+      { path: '/capacity', icon: '📦', label: '容量' },
+      { path: '/inspection', icon: '⏰', label: '巡检' }
+    ]
+
+    // 根据当前路由 + 数据库开关状态动态过滤导航项
     const currentNavItems = computed(() => {
       const db = route.meta?.db
-      if (db === 'mysql') return mysqlNavItems
-      if (db === 'redis') return redisNavItems
-      return mysqlNavItems // 默认
+      const common = effectiveCommonNavItems.value
+      if (db === 'mysql') return mysqlEnabled.value ? [...mysqlNavItems, ...common] : common
+      if (db === 'redis') return redisEnabled.value ? [...redisNavItems, ...common] : common
+      if (db === 'all') return common
+      // 默认：优先显示启用的数据库
+      if (mysqlEnabled.value) return [...mysqlNavItems, ...common]
+      if (redisEnabled.value) return [...redisNavItems, ...common]
+      return common
     })
 
     const currentBottomNavItems = computed(() => {
       const db = route.meta?.db
-      if (db === 'mysql') return mysqlBottomNavItems
-      if (db === 'redis') return redisBottomNavItems
-      return mysqlBottomNavItems
+      if (db === 'mysql') return mysqlEnabled.value ? mysqlBottomNavItems : commonBottomNavItems
+      if (db === 'redis') return redisEnabled.value ? redisBottomNavItems : commonBottomNavItems
+      if (db === 'all') return commonBottomNavItems
+      if (mysqlEnabled.value) return mysqlBottomNavItems
+      if (redisEnabled.value) return redisBottomNavItems
+      return commonBottomNavItems
     })
 
     const currentTitle = computed(() => {
@@ -262,27 +303,18 @@ export default {
       return recentAlerts.value.filter(a => !a.is_read).length
     })
 
-    function formatTime(t) {
-      if (!t) return ''
-      const d = new Date(t)
-      return `${d.getMonth() + 1}/${d.getDate()} ${d.getHours()}:${String(d.getMinutes()).padStart(2, '0')}`
-    }
-
-    function formatLogTime(t) {
-      if (!t) return ''
-      const d = new Date(t)
-      return `${d.getHours()}:${String(d.getMinutes()).padStart(2, '0')}:${String(d.getSeconds()).padStart(2, '0')}`
-    }
-
-    // 错误日志管理
+    // 错误日志管理：通过 errorLog 的监听器实时更新，避免高频轮询
     function refreshErrorLog() {
       try {
-        const saved = localStorage.getItem('app_error_log')
-        if (saved) {
-          errorLogs.value = JSON.parse(saved)
-          hasErrors.value = errorLogs.value.some(l => l.level === 'error')
-        }
+        const logs = window.__errorLog ? window.__errorLog.getAll() : []
+        errorLogs.value = logs
+        hasErrors.value = logs.some(l => l.level === 'error')
       } catch (_) { /* ignore */ }
+    }
+
+    // 新错误产生时实时刷新（替代 3 秒轮询）
+    function onErrorLogEntry(_entry) {
+      refreshErrorLog()
     }
 
     function clearErrorLog() {
@@ -353,9 +385,6 @@ export default {
       autoLogin()
     }
 
-    // 定期刷新错误日志
-    let errorLogTimer = null
-
     onMounted(async () => {
       await autoLogin()
       if (loggedIn.value) {
@@ -363,14 +392,20 @@ export default {
         loadAlerts()
       }
       refreshErrorLog()
-      errorLogTimer = setInterval(refreshErrorLog, 3000)
+      // 订阅 errorLog 实时更新，替代高频轮询
+      if (window.__errorLog) {
+        window.__errorLog.onLoad(onErrorLogEntry)
+      }
       window.addEventListener('auth-expired', onAuthExpired)
     })
 
     onUnmounted(() => {
       wsManager.disconnectAll()
-      if (errorLogTimer) clearInterval(errorLogTimer)
+      if (window.__errorLog) {
+        window.__errorLog.offLoad(onErrorLogEntry)
+      }
       window.removeEventListener('auth-expired', onAuthExpired)
+      dbToggle.offChange(_toggleListener)
     })
 
     return {

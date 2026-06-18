@@ -9,7 +9,8 @@ from fastapi import APIRouter, Query
 from pydantic import BaseModel
 
 from src.collector.mysql_connector import MySQLConnector
-from src.storage.database import DatabaseManager
+from src.web.api.deps import get_db as _get_db
+from src.web.api.deps import get_mysql_connector as _get_connector
 
 logger = logging.getLogger(__name__)
 
@@ -23,58 +24,6 @@ class TestConnectionRequest(BaseModel):
     port: int = 3306
     user: str = "root"
     password: str = ""
-
-
-# ── 数据库实例 ──────────────────────────────────────────────
-
-_db: DatabaseManager | None = None
-
-
-def _get_db() -> DatabaseManager:
-    global _db
-    if _db is None:
-        _db = DatabaseManager()
-    return _db
-
-
-def _get_connector(instance_id: Optional[int] = None) -> Optional[MySQLConnector]:
-    """根据 instance_id 获取 MySQL 连接器"""
-    if instance_id is not None:
-        connector = MySQLConnector.get_instance_connection(instance_id)
-        if connector:
-            return connector
-    # 默认连接：尝试从数据库找第一个有凭据的实例
-    try:
-        import sqlite3
-        import json as _json
-        from src.config import Config
-        config = Config()
-        db_path = config.get("storage", "db_path", default="./data/logs.db")
-        conn = sqlite3.connect(db_path)
-        conn.row_factory = sqlite3.Row
-        cursor = conn.execute(
-            "SELECT id, host, port, credentials FROM instances WHERE credentials IS NOT NULL ORDER BY id DESC LIMIT 1"
-        )
-        row = cursor.fetchone()
-        conn.close()
-        if row:
-            user, password = 'root', ''
-            try:
-                creds = _json.loads(row['credentials'])
-                user = creds.get('user', 'root')
-                password = creds.get('password', '')
-            except (_json.JSONDecodeError, TypeError):
-                pass
-            return MySQLConnector(
-                host=row['host'] or 'localhost',
-                port=row['port'] or 3306,
-                user=user,
-                password=password,
-            )
-    except Exception:
-        pass
-    # 最终兜底
-    return MySQLConnector()
 
 
 def _parse_innodb_status(status_text: str) -> dict:

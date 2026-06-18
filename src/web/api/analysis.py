@@ -7,9 +7,9 @@ from fastapi import APIRouter, Depends, HTTPException, Query
 from pydantic import BaseModel
 
 from src.config import Config
-from src.storage.database import DatabaseManager
 from src.utils import is_valid_time_range, parse_time_range, parse_time_range_datetime
 from src.web.api.auth import get_current_user
+from src.web.api.deps import get_db as _get_db
 
 logger = logging.getLogger(__name__)
 
@@ -60,18 +60,6 @@ class ChatRequest(BaseModel):
 
 class ChatResponse(BaseModel):
     response: str
-
-
-# ── 数据库实例 ──────────────────────────────────────────────
-
-_db: DatabaseManager | None = None
-
-
-def _get_db() -> DatabaseManager:
-    global _db
-    if _db is None:
-        _db = DatabaseManager()
-    return _db
 
 
 # ── API 端点 ────────────────────────────────────────────────

@@ -149,6 +149,8 @@
 import { ref, computed, onMounted, onUnmounted } from 'vue'
 import { useRoute } from 'vue-router'
 import { api } from '../api.js'
+import { formatTimestamp as formatTime } from '../utils/datetime.js'
+import { formatPercent } from '../utils/format.js'
 
 const route = useRoute()
 const instanceId = ref(route.query.instance_id || '')
@@ -163,30 +165,6 @@ const rdb = ref({})
 const aof = ref({})
 
 let refreshTimer = null
-
-// 格式化百分比
-function formatPercent(val) {
-  if (val == null) return '-'
-  const num = Number(val)
-  if (isNaN(num)) return '-'
-  return num.toFixed(1) + '%'
-}
-
-// 格式化时间
-function formatTime(val) {
-  if (!val) return '-'
-  // 如果是 Unix 时间戳（秒）
-  const num = Number(val)
-  if (!isNaN(num) && num > 1e9 && num < 1e12) {
-    const d = new Date(num * 1000)
-    return d.toLocaleString('zh-CN', { hour12: false })
-  }
-  if (!isNaN(num) && num > 1e12) {
-    const d = new Date(num)
-    return d.toLocaleString('zh-CN', { hour12: false })
-  }
-  return String(val)
-}
 
 // 距上次保存时间样式
 function getSaveAgeClass(seconds) {
@@ -302,24 +280,29 @@ async function loadPersistence() {
     const res = await api.getRedisPersistenceDetail(params)
     const data = res.data || {}
 
+    // API 返回嵌套结构：{ rdb: {...}, aof: {...}, loading: false, recommendation: "..." }
+    // 同时兼容扁平结构
+    const rdbData = data.rdb || {}
+    const aofData = data.aof || {}
+
     // RDB 数据
     rdb.value = {
-      last_save_time: data.rdb_last_save_time ?? data.last_save_time,
-      seconds_since_last_save: data.rdb_seconds_since_last_save ?? data.seconds_since_last_save,
-      changes_since_last_save: data.rdb_changes_since_last_save ?? data.changes_since_last_save,
-      bgsave_in_progress: data.rdb_bgsave_in_progress ?? data.bgsave_in_progress ?? false,
-      last_bgsave_status: data.rdb_last_bgsave_status ?? data.last_bgsave_status ?? 'ok',
-      last_bgsave_time_sec: data.rdb_last_bgsave_time_sec ?? data.last_bgsave_time_sec
+      last_save_time: rdbData.last_save_time ?? rdbData.rdb_last_save_time ?? data.rdb_last_save_time ?? data.last_save_time,
+      seconds_since_last_save: rdbData.seconds_since_last_save ?? rdbData.rdb_seconds_since_last_save ?? data.rdb_seconds_since_last_save ?? data.seconds_since_last_save,
+      changes_since_last_save: rdbData.changes_since_last_save ?? rdbData.rdb_changes_since_last_save ?? data.rdb_changes_since_last_save ?? data.changes_since_last_save,
+      bgsave_in_progress: rdbData.bgsave_in_progress ?? rdbData.rdb_bgsave_in_progress ?? data.rdb_bgsave_in_progress ?? data.bgsave_in_progress ?? false,
+      last_bgsave_status: rdbData.last_bgsave_status ?? rdbData.rdb_last_bgsave_status ?? data.rdb_last_bgsave_status ?? data.last_bgsave_status ?? 'ok',
+      last_bgsave_time_sec: rdbData.last_bgsave_time_sec ?? rdbData.rdb_last_bgsave_time_sec ?? data.rdb_last_bgsave_time_sec ?? data.last_bgsave_time_sec
     }
 
     // AOF 数据
     aof.value = {
-      enabled: data.aof_enabled ?? data.aof_enabled ?? false,
-      rewrite_in_progress: data.aof_rewrite_in_progress ?? data.rewrite_in_progress ?? false,
-      last_write_status: data.aof_last_write_status ?? data.last_write_status ?? 'ok',
-      current_size: data.aof_current_size ?? data.aof_current_size_human ?? data.current_size,
-      base_size: data.aof_base_size ?? data.aof_base_size_human ?? data.base_size,
-      rewrite_percent: data.aof_rewrite_percent ?? data.rewrite_percent
+      enabled: aofData.enabled ?? aofData.aof_enabled ?? data.aof_enabled ?? false,
+      rewrite_in_progress: aofData.rewrite_in_progress ?? aofData.aof_rewrite_in_progress ?? data.aof_rewrite_in_progress ?? data.rewrite_in_progress ?? false,
+      last_write_status: aofData.last_write_status ?? aofData.aof_last_write_status ?? data.aof_last_write_status ?? data.last_write_status ?? 'ok',
+      current_size: aofData.current_size ?? aofData.aof_current_size ?? aofData.aof_current_size_human ?? data.aof_current_size ?? data.aof_current_size_human ?? data.current_size,
+      base_size: aofData.base_size ?? aofData.aof_base_size ?? aofData.aof_base_size_human ?? data.aof_base_size ?? data.aof_base_size_human ?? data.base_size,
+      rewrite_percent: aofData.rewrite_percent ?? aofData.aof_rewrite_percent ?? data.aof_rewrite_percent ?? data.rewrite_percent
     }
 
     error.value = ''

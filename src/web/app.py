@@ -10,13 +10,13 @@ from starlette.responses import FileResponse, JSONResponse
 from starlette.staticfiles import StaticFiles
 
 from src.config import Config
-from src.storage.database import DatabaseManager
 from src.status import StatusTracker
+from src.web.api.deps import get_db as _get_db_instance
 
 logger = logging.getLogger(__name__)
 
 # 全局引用，供生命周期事件使用
-_db: DatabaseManager | None = None
+_db = None
 _watcher = None
 
 # 前端构建产物路径
@@ -141,6 +141,12 @@ def create_app() -> FastAPI:
     from src.web.api.redis_slowlog import router as redis_slowlog_router
     from src.web.api.redis_analysis import router as redis_analysis_router
     from src.web.api.redis_cluster import router as redis_cluster_router
+    from src.web.api.redis_chat import router as redis_chat_router
+    from src.web.api.redis_baseline import router as redis_baseline_router
+    from src.web.api.redis_reports import router as redis_reports_router
+    from src.web.api.diagnosis import router as diagnosis_router
+    from src.web.api.capacity import router as capacity_router
+    from src.web.api.inspection import router as inspection_router
     from src.web.websocket import router as ws_router
 
     app.include_router(auth_router)
@@ -161,6 +167,12 @@ def create_app() -> FastAPI:
     app.include_router(redis_slowlog_router)
     app.include_router(redis_analysis_router)
     app.include_router(redis_cluster_router)
+    app.include_router(redis_chat_router)
+    app.include_router(redis_baseline_router)
+    app.include_router(redis_reports_router)
+    app.include_router(diagnosis_router)
+    app.include_router(capacity_router)
+    app.include_router(inspection_router)
     app.include_router(ws_router)
 
     # ── 启动事件 ─────────────────────────────────────────
@@ -169,8 +181,8 @@ def create_app() -> FastAPI:
         global _db, _watcher
         config = Config()
 
-        # 初始化数据库
-        _db = DatabaseManager()
+        # 初始化数据库（使用 deps 单例，与各 API 模块共享同一实例）
+        _db = _get_db_instance()
         await _db.initialize()
         logger.info("数据库初始化完成")
 

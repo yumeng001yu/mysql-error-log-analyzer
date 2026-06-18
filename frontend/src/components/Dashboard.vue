@@ -94,6 +94,7 @@
 <script>
 import { ref, onMounted } from 'vue'
 import { api } from '../api.js'
+import { formatTimeShort as formatTime } from '../utils/datetime.js'
 
 export default {
   name: 'Dashboard',
@@ -112,12 +113,6 @@ export default {
       { label: '24小时', value: '24h' },
       { label: '1小时', value: '1h' }
     ]
-
-    function formatTime(t) {
-      if (!t) return ''
-      const d = new Date(t)
-      return `${d.getMonth() + 1}/${d.getDate()} ${d.getHours()}:${String(d.getMinutes()).padStart(2, '0')}`
-    }
 
     function getPeriodParam() {
       return period.value === 'all' ? '' : period.value

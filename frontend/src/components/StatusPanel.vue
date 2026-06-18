@@ -100,6 +100,7 @@
 <script>
 import { ref, onMounted, onUnmounted } from 'vue'
 import { api, wsManager } from '../api.js'
+import { formatTimeShort as formatTime } from '../utils/datetime.js'
 
 export default {
   name: 'StatusPanel',
@@ -135,12 +136,6 @@ export default {
         i++
       }
       return size.toFixed(1) + ' ' + units[i]
-    }
-
-    function formatTime(t) {
-      if (!t) return '-'
-      const d = new Date(t)
-      return `${d.getMonth() + 1}/${d.getDate()} ${d.getHours()}:${String(d.getMinutes()).padStart(2, '0')}`
     }
 
     async function loadStatus() {

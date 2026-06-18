@@ -4,10 +4,13 @@
 """
 import re
 import json
+import logging
 import hashlib
-from dataclasses import dataclass, field, asdict
+from dataclasses import dataclass, asdict
 from typing import Optional
 from datetime import datetime
+
+logger = logging.getLogger(__name__)
 
 
 @dataclass
@@ -174,11 +177,6 @@ class DeadlockAnalyzer:
 
         # 设置 victim
         if victim_tx_num:
-            # 找到对应的事务 ID
-            for tx in transactions:
-                # victim_tx_num 是日志中的序号 (1), (2) 等
-                # 需要映射到 transaction_id
-                pass
             # 直接从 raw_text 中提取被回滚事务的 transaction_id
             victim_tx_id = self._find_victim_tx_id(log_text, victim_tx_num, transactions)
             lock_chain.victim = victim_tx_id

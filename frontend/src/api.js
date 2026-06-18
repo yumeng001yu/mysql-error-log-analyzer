@@ -53,16 +53,9 @@ export const api = {
   getLogDistribution(params) {
     return http.get('/logs/distribution', { params })
   },
-  getLogTrend(params) {
-    return http.get('/logs/trend', { params })
-  },
   // 语义搜索
   semanticSearch(params) {
     return http.get('/logs/semantic', { params })
-  },
-  // 语义相似度关联（知识图谱用）
-  getSemanticSimilar(params) {
-    return http.get('/logs/semantic/similar', { params })
   },
 
   // 分析
@@ -150,7 +143,6 @@ export const api = {
   getMonitorStatus(params) { return http.get('/monitor/status', { params }) },
   getProcesslist(params) { return http.get('/monitor/processlist', { params }) },
   getInnodbStatus(params) { return http.get('/monitor/innodb', { params }) },
-  getMonitorHistory(params) { return http.get('/monitor/history', { params }) },
   getReplicationStatus(params) { return http.get('/monitor/replication', { params }) },
   testMySQLConnection(data) { return http.post('/monitor/test-connection', data) },
 
@@ -168,7 +160,6 @@ export const api = {
   deleteNotificationChannel(id) { return http.delete(`/alerts/channels/${id}`) },
   testNotificationChannel(id) { return http.post(`/alerts/channels/${id}/test`) },
   getAlertStats() { return http.get('/alerts/stats') },
-  checkAlerts() { return http.post('/alerts/check') },
 
   // 模式识别
   recognizePatterns(params) { return http.get('/patterns/recognize', { params }) },
@@ -201,16 +192,12 @@ export const api = {
   getReportList(params) { return http.get('/reports/list', { params }) },
   getReport(id) { return http.get(`/reports/${id}`) },
   deleteReport(id) { return http.delete(`/reports/${id}`) },
-  getLatestReport(type, params) { return http.get(`/reports/latest/${type}`, { params }) },
 
   // ========== Redis 监控 ==========
   getRedisStatus(params) { return http.get('/redis/status', { params }) },
-  getRedisClients(params) { return http.get('/redis/clients', { params }) },
   getRedisReplication(params) { return http.get('/redis/replication', { params }) },
   getRedisPersistence(params) { return http.get('/redis/persistence', { params }) },
-  getRedisConfig(params) { return http.get('/redis/config', { params }) },
   getRedisLatency(params) { return http.get('/redis/latency', { params }) },
-  testRedisConnection(params) { return http.post('/redis/test-connection', null, { params }) },
 
   // ========== Redis 慢查询 ==========
   getRedisSlowlog(params) { return http.get('/redis/slowlog/', { params }) },
@@ -222,7 +209,6 @@ export const api = {
   scanRedisKeys(params) { return http.post('/redis/keys/scan', null, { params }) },
   getRedisTopKeys(params) { return http.get('/redis/keys/top', { params }) },
   getRedisKeyspace(params) { return http.get('/redis/keyspace', { params }) },
-  getRedisKeyDetail(key, params) { return http.get(`/redis/key/${key}`, { params }) },
   getRedisPersistenceDetail(params) { return http.get('/redis/persistence/detail', { params }) },
 
   // ========== Redis 集群/哨兵 ==========
@@ -230,6 +216,40 @@ export const api = {
   getRedisClusterNodes(params) { return http.get('/redis/cluster/nodes', { params }) },
   getRedisSentinelMasters(params) { return http.get('/redis/sentinel/masters', { params }) },
   getRedisSentinelSlaves(params) { return http.get('/redis/sentinel/slaves', { params }) },
+
+  // ========== Redis 对话 ==========
+  sendRedisChat(data) { return http.post('/redis/chat', data) },
+
+  // ========== Redis 运维报表 ==========
+  generateRedisReport(data) { return http.post('/redis/reports/generate', data) },
+  getRedisReports(params) { return http.get('/redis/reports', { params }) },
+  getRedisReportDetail(id) { return http.get(`/redis/reports/${id}`) },
+  deleteRedisReport(id) { return http.delete(`/redis/reports/${id}`) },
+
+  // ========== Redis 性能基线 ==========
+  collectRedisMetrics(data) { return http.post('/redis/baseline/collect', data) },
+  buildRedisBaseline(data) { return http.post('/redis/baseline/build', data) },
+  getRedisBaselines(params) { return http.get('/redis/baseline/list', { params }) },
+  getRedisAnomalies(params) { return http.get('/redis/baseline/anomalies', { params }) },
+  getRedisForecast(params) { return http.get('/redis/baseline/forecast', { params }) },
+
+  // ========== 一键诊断 ==========
+  runDiagnosis(data) { return http.post('/diagnosis/run', data) },
+  getDiagnosisHistory(params) { return http.get('/diagnosis/history', { params }) },
+  getDiagnosisDetail(id) { return http.get(`/diagnosis/${id}`) },
+
+  // ========== 容量规划 ==========
+  getCapacitySummary(params) { return http.get('/capacity/summary', { params }) },
+  getCapacityForecast(params) { return http.get('/capacity/forecast', { params }) },
+  getCapacityThresholdCheck(params) { return http.get('/capacity/threshold-check', { params }) },
+
+  // ========== 定时巡检 ==========
+  runInspection(data) { return http.post('/inspection/run', data) },
+  getInspectionHistory(params) { return http.get('/inspection/history', { params }) },
+  getInspectionDetail(id) { return http.get(`/inspection/${id}`) },
+  getInspectionSchedules() { return http.get('/inspection/schedules') },
+  createInspectionSchedule(data) { return http.post('/inspection/schedule', data) },
+  deleteInspectionSchedule(id) { return http.delete(`/inspection/schedule/${id}`) },
 }
 
 // ========== WebSocket 管理 ==========

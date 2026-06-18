@@ -171,6 +171,8 @@
 <script setup>
 import { ref, computed, onMounted, onUnmounted } from 'vue'
 import { api } from '../api.js'
+import { formatDateTime as formatTime } from '../utils/datetime.js'
+import { truncate } from '../utils/format.js'
 
 // ── 搜索状态 ──────────────────────────────────────────
 const searchQuery = ref('')
@@ -321,19 +323,6 @@ function goPage(p) {
 function onPageSizeChange() {
   page.value = 1
   fetchResults()
-}
-
-// ── 工具函数 ──────────────────────────────────────────
-function formatTime(t) {
-  if (!t) return '-'
-  const d = new Date(t)
-  const pad = (n) => String(n).padStart(2, '0')
-  return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())} ${pad(d.getHours())}:${pad(d.getMinutes())}:${pad(d.getSeconds())}`
-}
-
-function truncate(str, len) {
-  if (!str) return ''
-  return str.length > len ? str.substring(0, len) + '...' : str
 }
 
 // ── 加载分类字段 ──────────────────────────────────────

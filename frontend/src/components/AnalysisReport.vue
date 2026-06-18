@@ -112,7 +112,7 @@
 <script>
 import { ref, onMounted } from 'vue'
 import { api } from '../api.js'
-import { marked } from 'marked'
+import { renderMarkdown } from '../utils/markdown.js'
 
 export default {
   name: 'AnalysisReport',
@@ -133,15 +133,6 @@ export default {
     function corrTypeLabel(t) {
       const map = { time_pattern: '时间模式', cross_category: '跨类别', anomaly: '异常' }
       return map[t] || t || '关联'
-    }
-
-    function renderMarkdown(text) {
-      if (!text) return ''
-      try {
-        return marked.parse(text)
-      } catch {
-        return text.replace(/\n/g, '<br>')
-      }
     }
 
     function onPeriodSelect() {

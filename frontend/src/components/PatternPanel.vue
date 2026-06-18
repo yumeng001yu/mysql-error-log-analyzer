@@ -163,6 +163,8 @@
 <script setup>
 import { ref, computed, reactive, onMounted } from 'vue'
 import { api } from '../api.js'
+import { formatTimeShort as formatTime } from '../utils/datetime.js'
+import { formatPercent } from '../utils/format.js'
 
 // 状态
 const loading = ref(false)
@@ -193,24 +195,6 @@ const displayPatterns = computed(() => {
 })
 
 // 方法
-function formatTime(t) {
-  if (!t) return '-'
-  const d = new Date(t)
-  if (isNaN(d.getTime())) return '-'
-  const month = d.getMonth() + 1
-  const day = d.getDate()
-  const hour = d.getHours()
-  const min = String(d.getMinutes()).padStart(2, '0')
-  return `${month}/${day} ${hour}:${min}`
-}
-
-function formatPercent(val) {
-  if (val == null) return '-'
-  const num = Number(val)
-  if (isNaN(num)) return '-'
-  return num.toFixed(1) + '%'
-}
-
 function renderTemplate(template) {
   if (!template) return ''
   // 将 * 占位符高亮显示
