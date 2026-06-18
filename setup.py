@@ -24,6 +24,12 @@ setup(
         "httpx>=0.25.0",
         "pydantic>=2.5.0",
         "pydantic-settings>=2.1.0",
+        "psutil>=5.9.0",
+        "aiofiles>=23.2.0",
+        "turbovec>=0.7.0",
+        "numpy>=1.24.0",
+        "pymysql>=1.1.0",
+        "redis>=5.0.0",
     ],
     entry_points={
         "console_scripts": [
